@@ -82,6 +82,7 @@ export interface CandidateProfile {
 }
 
 export interface ResumeContent {
+  personal_info?: PersonalInfo;
   summary: string;
   experience: ExperienceItem[];
   education: EducationItem[];
@@ -195,4 +196,26 @@ export async function aiImproveBullet(section: string, text: string, instruction
     method: "POST",
     body: JSON.stringify({ section, text, instruction }),
   });
+}
+
+export async function fetchResumeHtml(id: string): Promise<string> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("prepcv_token") : null;
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const url = `${API_BASE_URL}/api/resumes/${id}/html`;
+  const response = await fetch(url, { headers, credentials: "include" });
+  if (!response.ok) {
+    throw new Error("Failed to fetch resume HTML.");
+  }
+  return response.text();
+}
+
+export async function fetchPreviewHtml(content: ResumeContent): Promise<string> {
+  const data = await apiRequest<{ html: string }>("/api/resumes/render-preview", {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+  return data.html;
 }

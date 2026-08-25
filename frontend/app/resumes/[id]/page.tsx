@@ -9,6 +9,7 @@ import {
   fetchResumeById,
   updateResumeContent,
   aiImproveBullet,
+  fetchResumeHtml,
 } from "@/lib/api";
 
 export default function ResumeEditorPage() {
@@ -21,6 +22,7 @@ export default function ResumeEditorPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showAtsModal, setShowAtsModal] = useState<boolean>(false);
+  const [htmlPreview, setHtmlPreview] = useState<string>("");
 
   const [title, setTitle] = useState<string>("ATS Optimized Resume");
   const [content, setContent] = useState<ResumeContent>({
@@ -37,6 +39,15 @@ export default function ResumeEditorPage() {
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [aiSuggestion, setAiSuggestion] = useState<{ text: string; explanation?: string } | null>(null);
 
+  const loadHtmlPreview = async (id: string) => {
+    try {
+      const html = await fetchResumeHtml(id);
+      setHtmlPreview(html);
+    } catch (err) {
+      console.error("Failed to load HTML preview:", err);
+    }
+  };
+
   useEffect(() => {
     async function loadResume() {
       if (!resumeId) return;
@@ -46,6 +57,7 @@ export default function ResumeEditorPage() {
         setTitle(data.title || "ATS Optimized Resume");
         if (data.content) {
           setContent({
+            personal_info: data.content.personal_info || data.profile_snapshot?.personal_info,
             summary: data.content.summary || "",
             experience: data.content.experience || [],
             education: data.content.education || [],
@@ -54,6 +66,7 @@ export default function ResumeEditorPage() {
             certifications: data.content.certifications || [],
           });
         }
+        await loadHtmlPreview(resumeId);
       } catch (err: any) {
         setErrorMsg(err.message || "Failed to load resume.");
       } finally {
@@ -68,7 +81,8 @@ export default function ResumeEditorPage() {
       setSaving(true);
       setErrorMsg(null);
       await updateResumeContent(resumeId, title, content);
-      setSuccessMsg("Resume saved successfully!");
+      await loadHtmlPreview(resumeId);
+      setSuccessMsg("Resume and dynamic HTML updated successfully!");
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to save resume.");
@@ -116,8 +130,27 @@ export default function ResumeEditorPage() {
     setImprovingIndex(null);
   };
 
+  const handleDownloadHtml = () => {
+    if (!htmlPreview) return;
+    const blob = new Blob([htmlPreview], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/\s+/g, "_") || "resume"}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleExportPDF = () => {
-    window.print();
+    // If iframe exists, focus and print it, else window.print()
+    const iframe = document.getElementById("ats-resume-iframe") as HTMLIFrameElement;
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.print();
+    } else {
+      window.print();
+    }
   };
 
   if (loading) {
@@ -207,6 +240,25 @@ export default function ResumeEditorPage() {
               }}
             >
               {saving ? "Saving..." : "Save"}
+            </button>
+
+            <button
+              onClick={handleDownloadHtml}
+              style={{
+                backgroundColor: "#0284C7",
+                color: "#FFFFFF",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              📄 Download HTML
             </button>
 
             <button
@@ -333,138 +385,84 @@ export default function ResumeEditorPage() {
           {/* Right Live ATS Document Preview */}
           <div style={{ flex: 1, padding: "32px", overflowY: "auto", display: "flex", justifyContent: "center" }}>
             
-            <div className="ats-resume-paper" style={{
-              width: "210mm",
-              minHeight: "297mm",
-              backgroundColor: "#FFFFFF",
-              color: "#0F172A",
-              fontFamily: "Inter, Arial, sans-serif",
-              padding: "40px 48px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-              borderRadius: "2px",
-              lineHeight: 1.5
-            }}>
-              
-              {/* ATS Resume Header (Name & Contact Details - Pure Single Column Flow) */}
-              <div style={{ textAlign: "center", borderBottom: "2px solid #0F172A", paddingBottom: "16px", marginBottom: "20px" }}>
-                <h1 style={{ fontSize: "26px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 6px 0", color: "#0F172A" }}>
-                  {title.replace("'s Resume", "").replace("Resume", "").trim() || "CANDIDATE NAME"}
-                </h1>
-                <div style={{ fontSize: "13px", color: "#334155", fontWeight: 500 }}>
-                  Email: user@example.com | Phone: +92 311 XXXXXXX | Location: Lahore, Pakistan
-                </div>
-                <div style={{ fontSize: "13px", color: "#2563EB", marginTop: "4px" }}>
-                  LinkedIn: linkedin.com/in/candidate | Portfolio: github.com/candidate
-                </div>
+            {htmlPreview ? (
+              <div style={{ width: "210mm", minHeight: "297mm", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", borderRadius: "4px", overflow: "hidden", backgroundColor: "#FFFFFF" }}>
+                <iframe
+                  id="ats-resume-iframe"
+                  srcDoc={htmlPreview}
+                  title="Dynamic ATS Resume"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    minHeight: "297mm",
+                    border: "none",
+                    display: "block",
+                    backgroundColor: "#FFFFFF"
+                  }}
+                />
               </div>
-
-              {/* Professional Summary */}
-              {content.summary && (
-                <div style={{ marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "8px" }}>
-                    Professional Summary
-                  </h2>
-                  <p style={{ fontSize: "13px", color: "#334155", margin: 0, textAlign: "justify" }}>
-                    {content.summary}
-                  </p>
+            ) : (
+              <div className="ats-resume-paper" style={{
+                width: "210mm",
+                minHeight: "297mm",
+                backgroundColor: "#FFFFFF",
+                color: "#0F172A",
+                fontFamily: "Inter, Arial, sans-serif",
+                padding: "40px 48px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                borderRadius: "2px",
+                lineHeight: 1.5
+              }}>
+                
+                {/* ATS Resume Header */}
+                <div style={{ textAlign: "center", borderBottom: "2px solid #0F172A", paddingBottom: "16px", marginBottom: "20px" }}>
+                  <h1 style={{ fontSize: "26px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 6px 0", color: "#0F172A" }}>
+                    {title.replace("'s Resume", "").replace("Resume", "").trim() || "CANDIDATE NAME"}
+                  </h1>
                 </div>
-              )}
 
-              {/* Work Experience */}
-              {content.experience && content.experience.length > 0 && (
-                <div style={{ marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "12px" }}>
-                    Work Experience
-                  </h2>
-                  {content.experience.map((exp, idx) => (
-                    <div key={idx} style={{ marginBottom: "14px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                        <strong style={{ fontSize: "14px", color: "#0F172A" }}>{exp.position}</strong>
-                        <span style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>
-                          {exp.start_date ? `From ${exp.start_date} to ${exp.end_date || (exp.is_current ? "Present" : "Present")}` : (exp.end_date || "Present")}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: "13px", color: "#475569", fontStyle: "italic", marginBottom: "6px" }}>
-                        {exp.company} {exp.location ? `• ${exp.location}` : ""}
-                      </div>
-                      {exp.achievements && exp.achievements.length > 0 && (
-                        <ul style={{ margin: "4px 0 0 0", paddingLeft: "18px", fontSize: "13px", color: "#334155" }}>
-                          {exp.achievements.map((bullet, bIdx) => (
-                            <li key={bIdx} style={{ marginBottom: "4px" }}>{bullet}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Technical Skills */}
-              {content.skills && content.skills.length > 0 && (
-                <div style={{ marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "8px" }}>
-                    Skills & Competencies
-                  </h2>
-                  <div style={{ fontSize: "13px", color: "#334155", lineHeight: 1.6 }}>
-                    <strong>Technical Stack: </strong> {content.skills.join(" • ")}
+                {/* Professional Summary */}
+                {content.summary && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "8px" }}>
+                      Professional Summary
+                    </h2>
+                    <p style={{ fontSize: "13px", color: "#334155", margin: 0, textAlign: "justify" }}>
+                      {content.summary}
+                    </p>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Education */}
-              {content.education && content.education.length > 0 && (
-                <div style={{ marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "10px" }}>
-                    Education
-                  </h2>
-                  {content.education.map((edu, idx) => (
-                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <div>
-                        <strong style={{ fontSize: "13px", color: "#0F172A" }}>{edu.degree} {edu.field_of_study ? `in ${edu.field_of_study}` : ""}</strong>
-                        <div style={{ fontSize: "12px", color: "#475569" }}>{edu.institution}</div>
+                {/* Work Experience */}
+                {content.experience && content.experience.length > 0 && (
+                  <div style={{ marginBottom: "20px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "12px" }}>
+                      Work Experience
+                    </h2>
+                    {content.experience.map((exp, idx) => (
+                      <div key={idx} style={{ marginBottom: "14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                          <strong style={{ fontSize: "14px", color: "#0F172A" }}>{exp.position}</strong>
+                          <span style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>
+                            {exp.start_date ? `${exp.start_date} - ${exp.end_date || (exp.is_current ? "Present" : "Present")}` : (exp.end_date || "Present")}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "13px", color: "#475569", fontStyle: "italic", marginBottom: "6px" }}>
+                          {exp.company} {exp.location ? `• ${exp.location}` : ""}
+                        </div>
+                        {exp.achievements && exp.achievements.length > 0 && (
+                          <ul style={{ margin: "4px 0 0 0", paddingLeft: "18px", fontSize: "13px", color: "#334155" }}>
+                            {exp.achievements.map((bullet, bIdx) => (
+                              <li key={bIdx} style={{ marginBottom: "4px" }}>{bullet}</li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
-                      <div style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>
-                        {edu.start_date ? `From ${edu.start_date} to ${edu.end_date || "Present"}` : edu.end_date}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Projects */}
-              {content.projects && content.projects.length > 0 && (
-                <div style={{ marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "10px" }}>
-                    Projects
-                  </h2>
-                  {content.projects.map((proj, idx) => (
-                    <div key={idx} style={{ marginBottom: "8px" }}>
-                      <strong style={{ fontSize: "13px", color: "#0F172A" }}>{proj.name}</strong>
-                      {proj.technologies?.length ? <span style={{ fontSize: "12px", color: "#475569" }}> ({proj.technologies.join(", ")})</span> : null}
-                      <p style={{ fontSize: "13px", color: "#334155", margin: "2px 0 0 0" }}>{proj.description}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Certifications (Optional) */}
-              {content.certifications && content.certifications.length > 0 && (
-                <div style={{ marginBottom: "20px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "10px" }}>
-                    Certifications
-                  </h2>
-                  {content.certifications.map((cert, idx) => (
-                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "13px" }}>
-                      <div>
-                        <strong>{cert.name}</strong> — <span style={{ color: "#475569" }}>{cert.issuing_organization}</span>
-                      </div>
-                      {cert.issue_date && <span style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>{cert.issue_date}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
 

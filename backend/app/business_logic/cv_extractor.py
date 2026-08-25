@@ -68,27 +68,25 @@ def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
 
 
 async def parse_cv_text_with_llm(raw_text: str, job_title: str = "") -> Dict[str, Any]:
-    """Parse raw extracted CV text into structured profile JSON using Grok (xAI) LLM with fallback."""
-    from app.integrations.grok.client import format_cv_with_grok
+    """Parse raw extracted CV text into structured profile JSON using Google Gemini Flash with fallback."""
+    from app.integrations.gemini.client import format_cv_with_gemini
 
     settings = get_settings()
-    api_key = settings.xai_api_key
+    api_key = settings.gemini_api_key
 
     # Step 1: Use a quick heuristic pass to get a rough structured profile
     rough_profile = fallback_cv_parser(raw_text)
 
-    # Step 2: If Grok API key is available, send the rough profile + raw text
-    #         to Grok for intelligent formatting and population
+    # Step 2: If Gemini API key is available, send the rough profile + raw text
+    #         to Gemini for intelligent formatting, ATS optimization and population
     if api_key:
         try:
-            # Merge raw text into the rough profile so Grok has full context
             enriched_profile = {**rough_profile, "_raw_text": raw_text[:8000]}
-            formatted = await format_cv_with_grok(enriched_profile, job_title)
-            # Remove internal field before returning
+            formatted = await format_cv_with_gemini(enriched_profile, job_title)
             formatted.pop("_raw_text", None)
             return formatted
         except Exception as e:
-            logger.warning(f"Grok LLM formatting failed, falling back to heuristic parser: {e}")
+            logger.warning(f"Gemini LLM formatting failed, falling back to heuristic parser: {e}")
 
     return rough_profile
 

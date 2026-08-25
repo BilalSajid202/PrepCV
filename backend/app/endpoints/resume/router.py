@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_logic.profile import get_user_profile
@@ -9,6 +10,8 @@ from app.business_logic.resume_generator import (
     get_resume_by_id,
     get_user_resumes,
     improve_bullet_with_ai,
+    prepare_resume_render_data,
+    render_resume_html,
     save_generated_resume,
 )
 from app.database.models import User
@@ -180,3 +183,40 @@ async def ai_improve(
         improved_text=res.get("improved_text", req.text),
         explanation=res.get("explanation", "Improved with action verbs and impact formatting.")
     )
+
+
+@router.get("/{resume_id}/html", response_class=HTMLResponse)
+async def get_resume_html(
+    resume_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Render dynamic ATS-optimized HTML for a specific resume without LLM calls."""
+    resume = await get_resume_by_id(db, resume_id, current_user.id)
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found."
+        )
+
+    render_data = prepare_resume_render_data(
+        profile_snapshot=resume.profile_snapshot or {},
+        content=resume.content or {}
+    )
+    html_content = render_resume_html(render_data)
+    return HTMLResponse(content=html_content)
+
+
+@router.post("/render-preview")
+async def render_preview_html(
+    req: ResumeUpdateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Render dynamic HTML directly from submitted resume content without saving or LLM calls."""
+    content_dict = req.content.model_dump() if req.content else {}
+    render_data = prepare_resume_render_data(
+        profile_snapshot={"personal_info": {"full_name": current_user.full_name, "email": current_user.email}},
+        content=content_dict
+    )
+    html_content = render_resume_html(render_data)
+    return {"html": html_content}

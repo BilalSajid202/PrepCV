@@ -4,6 +4,7 @@ from app.schemas.profile import ProfileSchema
 
 
 class ResumeContentSchema(BaseModel):
+    personal_info: Optional[Dict[str, Any]] = Field(default_factory=dict)
     summary: str = Field(default="")
     experience: List[Dict[str, Any]] = Field(default_factory=list)
     education: List[Dict[str, Any]] = Field(default_factory=list)

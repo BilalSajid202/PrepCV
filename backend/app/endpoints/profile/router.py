@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_logic.cv_extractor import extract_raw_text_from_file, parse_cv_text_with_llm
 from app.business_logic.profile import get_user_profile, save_or_update_profile
-from app.integrations.grok.client import format_cv_with_grok
+from app.integrations.gemini.client import format_cv_with_gemini
 from app.database.models import User
 from app.database.session import get_db_session
 from app.endpoints.auth.deps import get_current_user
@@ -167,13 +167,13 @@ async def format_profile_with_ai(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Format manually-entered profile data using Grok LLM.
+    """Format manually-entered profile data using Google Gemini Flash.
     Enhances descriptions, populates missing fields, and tailors content
     for the specified job title. Saves the formatted result to the database."""
     raw_profile = req.profile.model_dump()
 
-    # Send through Grok for AI-powered formatting
-    formatted_profile = await format_cv_with_grok(raw_profile, req.job_title)
+    # Send through Gemini with input sanitization and schema validation
+    formatted_profile = await format_cv_with_gemini(raw_profile, req.job_title)
 
     # Ensure user identity fields are preserved
     if "personal_info" in formatted_profile:

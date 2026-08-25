@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ personal_info.full_name }} - Resume</title>
+<style>
+    /* ============================================================
+       ATS-SAFE RESUME TEMPLATE
+       - Single column, no tables-as-layout, no text boxes
+       - No headers/footers holding critical info
+       - No images of text
+       - All spacing driven by CSS variables set dynamically by
+         generate_resume.py based on how much content exists
+       ============================================================ */
+
+    @page {
+        size: A4;
+        margin: {{ page_margin }}mm;
+    }
+
+    :root {
+        --fs-base: {{ scale.fs_base }}px;
+        --fs-name: {{ scale.fs_name }}px;
+        --fs-section: {{ scale.fs_section }}px;
+        --line-height: {{ scale.line_height }};
+        --section-gap: {{ scale.section_gap }}px;
+        --item-gap: {{ scale.item_gap }}px;
+        --para-gap: {{ scale.para_gap }}px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        font-family: 'Helvetica', 'Arial', sans-serif;
+        font-size: var(--fs-base);
+        line-height: var(--line-height);
+        color: #1a1a1a;
+        margin: 0;
+        padding: 0;
+    }
+
+    /* ---------- Header (personal info) ---------- */
+    .header {
+        margin-bottom: var(--section-gap);
+    }
+
+    .name {
+        font-size: var(--fs-name);
+        font-weight: 700;
+        margin: 0 0 4px 0;
+        letter-spacing: 0.2px;
+    }
+
+    .title {
+        font-size: calc(var(--fs-base) + 1px);
+        color: #333333;
+        margin: 0 0 6px 0;
+        font-weight: 400;
+    }
+
+    .contact-line {
+        font-size: calc(var(--fs-base) - 1px);
+        color: #333333;
+        margin: 0;
+    }
+
+    .contact-line span:not(:last-child)::after {
+        content: " | ";
+        color: #888888;
+    }
+
+    /* ---------- Section ---------- */
+    .section {
+        margin-bottom: var(--section-gap);
+    }
+
+    .section:last-child {
+        margin-bottom: 0;
+    }
+
+    .section-title {
+        font-size: var(--fs-section);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #1a1a1a;
+        padding-bottom: 2px;
+        margin: 0 0 var(--item-gap) 0;
+    }
+
+    .summary-text {
+        margin: 0;
+        text-align: left;
+    }
+
+    /* ---------- Entries (experience / education / projects) ---------- */
+    .entry {
+        margin-bottom: var(--item-gap);
+    }
+
+    .entry:last-child {
+        margin-bottom: 0;
+    }
+
+    .entry-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+    }
+
+    .entry-title {
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .entry-subtitle {
+        font-style: italic;
+        color: #333333;
+        margin: 0 0 2px 0;
+    }
+
+    .entry-dates {
+        font-weight: 400;
+        color: #333333;
+        white-space: nowrap;
+        margin-left: 8px;
+    }
+
+    .entry-meta {
+        display: flex;
+        justify-content: space-between;
+        color: #333333;
+        font-size: calc(var(--fs-base) - 1px);
+    }
+
+    .entry-description {
+        margin: var(--para-gap) 0 0 0;
+    }
+
+    .achievements {
+        margin: var(--para-gap) 0 0 0;
+        padding-left: 16px;
+    }
+
+    .achievements li {
+        margin-bottom: 2px;
+    }
+
+    .achievements li:last-child {
+        margin-bottom: 0;
+    }
+
+    .tech-line {
+        margin: var(--para-gap) 0 0 0;
+        color: #333333;
+    }
+
+    .tech-line strong {
+        color: #1a1a1a;
+    }
+
+    .links-line {
+        margin: 2px 0 0 0;
+        color: #333333;
+        font-size: calc(var(--fs-base) - 1px);
+    }
+
+    /* ---------- Skills ---------- */
+    .skills-text {
+        margin: 0;
+    }
+
+    /* ---------- Certifications ---------- */
+    .cert-entry {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        margin-bottom: var(--item-gap);
+    }
+
+    .cert-entry:last-child {
+        margin-bottom: 0;
+    }
+
+    .cert-main {
+        font-weight: 700;
+    }
+
+    .cert-org {
+        font-style: italic;
+        color: #333333;
+        font-weight: 400;
+    }
+
+    .cert-date {
+        color: #333333;
+        white-space: nowrap;
+        margin-left: 8px;
+    }
+
+    .cert-id {
+        width: 100%;
+        font-size: calc(var(--fs-base) - 1px);
+        color: #555555;
+        margin-top: 1px;
+    }
+</style>
+</head>
+<body>
+
+    <!-- ================= HEADER ================= -->
+    <div class="header">
+        <p class="name">{{ personal_info.full_name }}</p>
+        {% if personal_info.professional_title %}
+        <p class="title">{{ personal_info.professional_title }}</p>
+        {% endif %}
+        <p class="contact-line">
+            {% if personal_info.location %}<span>{{ personal_info.location }}</span>{% endif %}
+            {% if personal_info.phone %}<span>{{ personal_info.phone }}</span>{% endif %}
+            {% if personal_info.email %}<span>{{ personal_info.email }}</span>{% endif %}
+            {% if personal_info.linkedin_url %}<span>{{ personal_info.linkedin_url }}</span>{% endif %}
+            {% if personal_info.github_url %}<span>{{ personal_info.github_url }}</span>{% endif %}
+            {% if personal_info.portfolio_url %}<span>{{ personal_info.portfolio_url }}</span>{% endif %}
+        </p>
+    </div>
+
+    <!-- ================= SUMMARY ================= -->
+    {% if personal_info.summary %}
+    <div class="section">
+        <p class="section-title">Summary</p>
+        <p class="summary-text">{{ personal_info.summary }}</p>
+    </div>
+    {% endif %}
+
+    <!-- ================= EXPERIENCE ================= -->
+    {% if experience and experience|length > 0 %}
+    <div class="section">
+        <p class="section-title">Experience</p>
+        {% for exp in experience %}
+        <div class="entry">
+            <div class="entry-top">
+                <p class="entry-title">{{ exp.position }}{% if exp.company %}, {{ exp.company }}{% endif %}</p>
+                <p class="entry-dates">
+                    {{ exp.start_date }} &ndash; {% if exp.is_current %}Present{% else %}{{ exp.end_date }}{% endif %}
+                </p>
+            </div>
+            {% if exp.location or exp.employment_type %}
+            <p class="entry-meta">
+                <span>{{ exp.location }}{% if exp.location and exp.employment_type %} &middot; {% endif %}{{ exp.employment_type }}</span>
+            </p>
+            {% endif %}
+            {% if exp.description %}
+            <p class="entry-description">{{ exp.description }}</p>
+            {% endif %}
+            {% if exp.achievements and exp.achievements|length > 0 %}
+            <ul class="achievements">
+                {% for item in exp.achievements %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ================= PROJECTS ================= -->
+    {% if projects and projects|length > 0 %}
+    <div class="section">
+        <p class="section-title">Projects</p>
+        {% for proj in projects %}
+        <div class="entry">
+            <div class="entry-top">
+                <p class="entry-title">{{ proj.name }}</p>
+            </div>
+            {% if proj.description %}
+            <p class="entry-description">{{ proj.description }}</p>
+            {% endif %}
+            {% if proj.achievements and proj.achievements|length > 0 %}
+            <ul class="achievements">
+                {% for item in proj.achievements %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {% if proj.technologies and proj.technologies|length > 0 %}
+            <p class="tech-line"><strong>Technologies:</strong> {{ proj.technologies|join(', ') }}</p>
+            {% endif %}
+            {% if proj.project_url or proj.github_url %}
+            <p class="links-line">
+                {% if proj.project_url %}{{ proj.project_url }}{% endif %}
+                {% if proj.project_url and proj.github_url %} | {% endif %}
+                {% if proj.github_url %}{{ proj.github_url }}{% endif %}
+            </p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ================= EDUCATION ================= -->
+    {% if education and education|length > 0 %}
+    <div class="section">
+        <p class="section-title">Education</p>
+        {% for edu in education %}
+        <div class="entry">
+            <div class="entry-top">
+                <p class="entry-title">
+                    {{ edu.degree }}{% if edu.field_of_study %}, {{ edu.field_of_study }}{% endif %}
+                </p>
+                <p class="entry-dates">
+                    {{ edu.start_date }} &ndash; {% if edu.is_current %}Present{% else %}{{ edu.end_date }}{% endif %}
+                </p>
+            </div>
+            <p class="entry-subtitle">
+                {{ edu.institution }}{% if edu.gpa %} &middot; GPA: {{ edu.gpa }}{% endif %}
+            </p>
+            {% if edu.description %}
+            <p class="entry-description">{{ edu.description }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- ================= SKILLS ================= -->
+    {% if skills and skills|length > 0 %}
+    <div class="section">
+        <p class="section-title">Skills</p>
+        <p class="skills-text">{{ skills|join(', ') }}</p>
+    </div>
+    {% endif %}
+
+    <!-- ================= CERTIFICATIONS ================= -->
+    {% if certifications and certifications|length > 0 %}
+    <div class="section">
+        <p class="section-title">Certifications</p>
+        {% for cert in certifications %}
+        <div class="cert-entry">
+            <div>
+                <span class="cert-main">{{ cert.name }}</span>{% if cert.issuing_organization %}<span class="cert-org"> &mdash; {{ cert.issuing_organization }}</span>{% endif %}
+                {% if cert.credential_id or cert.credential_url %}
+                <p class="cert-id">
+                    {% if cert.credential_id %}ID: {{ cert.credential_id }}{% endif %}
+                    {% if cert.credential_id and cert.credential_url %} | {% endif %}
+                    {% if cert.credential_url %}{{ cert.credential_url }}{% endif %}
+                </p>
+                {% endif %}
+            </div>
+            <span class="cert-date">
+                {{ cert.issue_date }}{% if cert.expiration_date %} &ndash; {{ cert.expiration_date }}{% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</body>
+</html>

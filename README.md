@@ -4,11 +4,12 @@
 
 ## Features
 
-- **CV Upload & AI Extraction** — Upload a PDF/DOCX resume; the system extracts text, parses it into structured data, and formats it using the Grok (xAI) LLM
+- **CV Upload & AI Extraction** — Upload a PDF/DOCX resume; the system extracts text, parses it into structured data, and formats it using Google Gemini Flash
 - **Target Job Title Prompt** — After uploading a CV or clicking "Format with AI", a modal asks for your target position (e.g., "AI Engineer") so the AI can tailor content for that role
-- **✨ Format with AI** — One-click button to send manually-entered profile data through Grok for professional enhancement (polished descriptions, action verbs, impact metrics)
-- **Auto-Save to Database** — Both CV upload and AI formatting automatically save the result to your profile in PostgreSQL
-- **ATS Resume Generation** — Generate an ATS-optimized resume from your profile data using Gemini Flash
+- **✨ Format with AI** — One-click button to send manually-entered profile data through Gemini Flash for professional ATS enhancement (sanitized prompts, forced JSON schema output, Pydantic validation)
+- **Auto-Save to Database** — Both CV upload and AI formatting automatically validate with Pydantic and save the result to your profile in PostgreSQL
+- **Pure Data -> Dynamic ATS Resume (No Second LLM Call)** — Once data is formatted and saved to the DB, the resume is directly rendered into an ATS-compliant dynamic HTML template with automatic content-density scaling (spacious, normal, compact, dense)
+- **Live HTML Preview & One-Click Download** — Interactive live preview in the resume editor and instant download of the standalone ATS HTML file or PDF
 - **Profile Wizard** — Step-by-step form covering Personal Info, Experience, Education, Skills, Projects, and Certifications
 - **AI Bullet Improvement** — Refine individual resume bullets with AI suggestions
 
@@ -25,9 +26,9 @@ PrepCV/
 │   │   ├── endpoints/         # HTTP routes, one folder per endpoint
 │   │   ├── function_calls/    # Application-facing calls to basic functions
 │   │   ├── functions/         # Small reusable functions with no HTTP concerns
-│   │   ├── integrations/      # External services (Grok xAI, Claude)
-│   │   │   ├── grok/          # Grok (xAI) client for CV formatting
-│   │   │   └── claude/        # Claude API client
+│   │   ├── integrations/      # External services (Gemini)
+│   │   │   └── gemini/        # Gemini client with prompt sanitization & schema validation
+│   │   ├── templates/         # Jinja2 ATS dynamic resume HTML template
 │   │   └── main.py
 │   ├── requirements.txt
 │   └── .env.example
@@ -65,11 +66,10 @@ Copy `.env.example` to `.env` in the `backend/` directory and configure:
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `XAI_API_KEY` | Grok (xAI) API key for CV formatting & profile enhancement |
-| `GEMINI_API_KEY` | Google Gemini API key for resume generation |
-| `CLAUDE_API_KEY` | Anthropic Claude API key (optional) |
+| `GEMINI_API_KEY` | Google Gemini API key for CV extraction, profile formatting, and bullet enhancement |
+| `XAI_API_KEY` | Optional xAI API key |
 
-> **Note:** Without `XAI_API_KEY`, CV upload and "Format with AI" fall back to a heuristic parser — no AI enhancement will be applied.
+> **Note:** Without `GEMINI_API_KEY`, CV upload and "Format with AI" fall back to a deterministic heuristic parser.
 
 ## API Endpoints
 
@@ -86,9 +86,10 @@ Copy `.env.example` to `.env` in the `backend/` directory and configure:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/resumes/generate` | Generate ATS-optimized resume |
+| `POST` | `/api/resumes/generate` | Generate ATS-optimized resume (pure data -> template) |
 | `GET` | `/api/resumes` | List all user resumes |
 | `GET` | `/api/resumes/:id` | Get a specific resume |
+| `GET` | `/api/resumes/:id/html` | Render standalone dynamic ATS HTML template |
 | `PUT` | `/api/resumes/:id` | Update resume title/content |
 | `POST` | `/api/resumes/ai-improve` | AI-improve a specific bullet point |
 

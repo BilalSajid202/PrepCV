@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     app_name: str = "PrepCV API"
     environment: str = "development"
     database_url: str = "postgresql+asyncpg://postgres:bilal202sajid@localhost:5432/prepcv"
-    claude_api_key: str = ""
     gemini_api_key: str = ""
     xai_api_key: str = ""
     secret_key: str = "prepcv-secret-key-change-in-production-super-secure-32chars"
