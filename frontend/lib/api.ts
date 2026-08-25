@@ -147,13 +147,21 @@ export async function saveProfile(profile: CandidateProfile): Promise<CandidateP
   });
 }
 
-export async function uploadCVFile(file: File): Promise<{ extracted_profile: CandidateProfile }> {
+export async function uploadCVFile(file: File, jobTitle: string = ""): Promise<CandidateProfile> {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("job_title", jobTitle);
 
-  return apiRequest<{ extracted_profile: CandidateProfile }>("/api/profile/upload-cv", {
+  return apiRequest<CandidateProfile>("/api/profile/upload-cv", {
     method: "POST",
     body: formData,
+  });
+}
+
+export async function formatProfileWithAI(profile: CandidateProfile, jobTitle: string): Promise<CandidateProfile> {
+  return apiRequest<CandidateProfile>("/api/profile/format-with-ai", {
+    method: "POST",
+    body: JSON.stringify({ profile, job_title: jobTitle }),
   });
 }
 

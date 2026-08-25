@@ -67,106 +67,30 @@ def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
     return clean_text
 
 
-async def parse_cv_text_with_llm(raw_text: str) -> Dict[str, Any]:
-    """Parse raw extracted CV text into structured profile JSON using Gemini Flash API with fallback."""
+async def parse_cv_text_with_llm(raw_text: str, job_title: str = "") -> Dict[str, Any]:
+    """Parse raw extracted CV text into structured profile JSON using Grok (xAI) LLM with fallback."""
+    from app.integrations.grok.client import format_cv_with_grok
+
     settings = get_settings()
-    api_key = settings.gemini_api_key
+    api_key = settings.xai_api_key
 
-    system_prompt = """You are an expert resume parser. Analyze the provided resume text and extract all information into a structured JSON object matching this exact schema:
-{
-  "personal_info": {
-    "full_name": "Full Name",
-    "professional_title": "Current or main job title",
-    "email": "Email address",
-    "phone": "Phone number",
-    "location": "City, Country",
-    "linkedin_url": "LinkedIn URL if present",
-    "github_url": "GitHub URL if present",
-    "portfolio_url": "Website/Portfolio URL if present",
-    "summary": "Professional summary or objective statement"
-  },
-  "experience": [
-    {
-      "company": "Company Name",
-      "position": "Job Title",
-      "location": "Location",
-      "employment_type": "Full-time / Contract / Intern etc.",
-      "start_date": "Start Date e.g. Jan 2023",
-      "end_date": "End Date e.g. Present",
-      "is_current": true/false,
-      "description": "Short role summary",
-      "achievements": ["Bullet point 1", "Bullet point 2"]
-    }
-  ],
-  "education": [
-    {
-      "institution": "University or School",
-      "degree": "Degree name e.g. BS Computer Science",
-      "field_of_study": "Major/Field",
-      "start_date": "Start Date e.g. 2019",
-      "end_date": "End Date e.g. 2023",
-      "is_current": true/false,
-      "gpa": "GPA e.g. 3.8 / 4.0",
-      "description": "Notes, honors, activities"
-    }
-  ],
-  "skills": ["Skill 1", "Skill 2", "Skill 3"],
-  "projects": [
-    {
-      "name": "Project Name",
-      "description": "Project summary",
-      "technologies": ["Tech 1", "Tech 2"],
-      "project_url": "URL if present",
-      "github_url": "GitHub URL if present",
-      "achievements": ["Key contribution bullet 1"]
-    }
-  ],
-  "certifications": [
-    {
-      "name": "Certification Name",
-      "issuing_organization": "Issuer e.g. AWS",
-      "issue_date": "Issue Date",
-      "expiration_date": "Expiry Date if any",
-      "credential_id": "Credential ID",
-      "credential_url": "Credential URL"
-    }
-  ]
-}
+    # Step 1: Use a quick heuristic pass to get a rough structured profile
+    rough_profile = fallback_cv_parser(raw_text)
 
-Respond ONLY with valid JSON inside a ```json``` block or directly as plain JSON."""
-
+    # Step 2: If Grok API key is available, send the rough profile + raw text
+    #         to Grok for intelligent formatting and population
     if api_key:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-            payload = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": system_prompt},
-                            {"text": f"Resume Content:\n{raw_text[:8000]}"}
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": 0.1,
-                    "responseMimeType": "application/json"
-                }
-            }
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(url, json=payload)
-                if resp.status_code == 200:
-                    res_data = resp.json()
-                    candidates = res_data.get("candidates", [])
-                    if candidates:
-                        content_text = candidates[0]["content"]["parts"][0]["text"]
-                        clean_json_str = re.sub(r"^```json\s*|\s*```$", "", content_text.strip(), flags=re.MULTILINE)
-                        parsed = json.loads(clean_json_str)
-                        return parsed
+            # Merge raw text into the rough profile so Grok has full context
+            enriched_profile = {**rough_profile, "_raw_text": raw_text[:8000]}
+            formatted = await format_cv_with_grok(enriched_profile, job_title)
+            # Remove internal field before returning
+            formatted.pop("_raw_text", None)
+            return formatted
         except Exception as e:
-            logger.warning(f"Gemini Flash LLM parsing failed or timed out, falling back to heuristic parser: {e}")
+            logger.warning(f"Grok LLM formatting failed, falling back to heuristic parser: {e}")
 
-    # Fallback heuristic parser if LLM API key is absent or request fails
-    return fallback_cv_parser(raw_text)
+    return rough_profile
 
 
 def fallback_cv_parser(raw_text: str) -> Dict[str, Any]:

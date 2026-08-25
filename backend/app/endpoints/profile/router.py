@@ -1,14 +1,24 @@
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_logic.cv_extractor import extract_raw_text_from_file, parse_cv_text_with_llm
 from app.business_logic.profile import get_user_profile, save_or_update_profile
+from app.integrations.grok.client import format_cv_with_grok
 from app.database.models import User
 from app.database.session import get_db_session
 from app.endpoints.auth.deps import get_current_user
 from app.schemas.profile import ProfileResponse, ProfileSchema
+
+# Inline request model for the format-with-ai endpoint
+from pydantic import BaseModel, Field
+from typing import Optional
+
+
+class FormatWithAIRequest(BaseModel):
+    profile: ProfileSchema
+    job_title: str = Field(..., min_length=1, max_length=150)
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +95,15 @@ async def update_profile(
     )
 
 
-@router.post("/upload-cv")
+@router.post("/upload-cv", response_model=ProfileResponse)
 async def upload_cv(
     file: UploadFile = File(...),
+    job_title: str = Form(""),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
 ):
-    """Upload CV/Resume (PDF or DOCX), extract text, and parse into structured profile format."""
+    """Upload CV/Resume (PDF or DOCX), extract text, format with Grok LLM using
+    the target job title for context, and auto-save the structured profile to the database."""
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -118,7 +131,7 @@ async def upload_cv(
         )
 
     raw_text = extract_raw_text_from_file(file_bytes, file.filename)
-    parsed_profile = await parse_cv_text_with_llm(raw_text)
+    parsed_profile = await parse_cv_text_with_llm(raw_text, job_title=job_title)
 
     # Ensure personal_info defaults to user full name and email if missing
     if "personal_info" in parsed_profile:
@@ -126,9 +139,62 @@ async def upload_cv(
             parsed_profile["personal_info"]["full_name"] = current_user.full_name
         if not parsed_profile["personal_info"].get("email"):
             parsed_profile["personal_info"]["email"] = current_user.email
+        # Set professional_title to the provided job title if not already set
+        if job_title and not parsed_profile["personal_info"].get("professional_title"):
+            parsed_profile["personal_info"]["professional_title"] = job_title
 
-    return {
-        "status": "success",
-        "filename": file.filename,
-        "extracted_profile": parsed_profile
-    }
+    # Auto-save the formatted profile to the database
+    profile_schema = ProfileSchema(**parsed_profile)
+    saved_profile = await save_or_update_profile(db, current_user, profile_schema)
+
+    return ProfileResponse(
+        id=saved_profile.id,
+        user_id=saved_profile.user_id,
+        personal_info=saved_profile.personal_info or {},
+        experience=saved_profile.experience or [],
+        education=saved_profile.education or [],
+        skills=saved_profile.skills or [],
+        projects=saved_profile.projects or [],
+        certifications=saved_profile.certifications or [],
+        created_at=saved_profile.created_at.isoformat(),
+        updated_at=saved_profile.updated_at.isoformat(),
+    )
+
+
+@router.post("/format-with-ai", response_model=ProfileResponse)
+async def format_profile_with_ai(
+    req: FormatWithAIRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Format manually-entered profile data using Grok LLM.
+    Enhances descriptions, populates missing fields, and tailors content
+    for the specified job title. Saves the formatted result to the database."""
+    raw_profile = req.profile.model_dump()
+
+    # Send through Grok for AI-powered formatting
+    formatted_profile = await format_cv_with_grok(raw_profile, req.job_title)
+
+    # Ensure user identity fields are preserved
+    if "personal_info" in formatted_profile:
+        if not formatted_profile["personal_info"].get("full_name"):
+            formatted_profile["personal_info"]["full_name"] = current_user.full_name
+        if not formatted_profile["personal_info"].get("email"):
+            formatted_profile["personal_info"]["email"] = current_user.email
+
+    # Save the formatted profile to the database
+    profile_schema = ProfileSchema(**formatted_profile)
+    saved_profile = await save_or_update_profile(db, current_user, profile_schema)
+
+    return ProfileResponse(
+        id=saved_profile.id,
+        user_id=saved_profile.user_id,
+        personal_info=saved_profile.personal_info or {},
+        experience=saved_profile.experience or [],
+        education=saved_profile.education or [],
+        skills=saved_profile.skills or [],
+        projects=saved_profile.projects or [],
+        certifications=saved_profile.certifications or [],
+        created_at=saved_profile.created_at.isoformat(),
+        updated_at=saved_profile.updated_at.isoformat(),
+    )

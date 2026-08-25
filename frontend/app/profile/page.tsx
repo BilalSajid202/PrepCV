@@ -13,6 +13,7 @@ import {
   fetchProfile,
   saveProfile,
   uploadCVFile,
+  formatProfileWithAI,
   generateResume,
 } from "@/lib/api";
 
@@ -29,6 +30,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [generating, setGenerating] = useState<boolean>(false);
+  const [formatting, setFormatting] = useState<boolean>(false);
+  const [formatModalMode, setFormatModalMode] = useState<"upload" | "format">("upload");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -37,6 +40,11 @@ export default function ProfilePage() {
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploadStepText, setUploadStepText] = useState<string>("");
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Job Title Modal State
+  const [showJobTitleModal, setShowJobTitleModal] = useState<boolean>(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [jobTitleInput, setJobTitleInput] = useState<string>("");
   const [extractedNotice, setExtractedNotice] = useState<boolean>(false);
 
   // Main Profile Form State
@@ -117,7 +125,8 @@ export default function ProfilePage() {
     }
   };
 
-  const handleFileUpload = async (file: File) => {
+  // Step 1: When user selects a file, validate and show the job title modal
+  const handleFileSelect = (file: File) => {
     if (!file) return;
     const fileName = file.name.toLowerCase();
     if (!fileName.endsWith(".pdf") && !fileName.endsWith(".docx")) {
@@ -125,6 +134,16 @@ export default function ProfilePage() {
       return;
     }
     setUploadError(null);
+    setPendingFile(file);
+    setJobTitleInput("");
+    setFormatModalMode("upload");
+    setShowJobTitleModal(true);
+  };
+
+  // Step 2: When user submits the job title, actually upload and process
+  const handleFileUpload = async (file: File, jobTitle: string) => {
+    setShowJobTitleModal(false);
+    setPendingFile(null);
     setIsUploading(true);
     setUploadProgress(15);
     setUploadStepText("Uploading CV file...");
@@ -136,35 +155,38 @@ export default function ProfilePage() {
 
       await new Promise((r) => setTimeout(r, 400));
       setUploadProgress(70);
-      setUploadStepText("Parsing experience, education & skills with AI...");
+      const roleLabel = jobTitle || "General";
+      setUploadStepText("Formatting profile for \u201c" + roleLabel + "\u201d role with AI...");
 
-      const res = await uploadCVFile(file);
+      const savedProfile = await uploadCVFile(file, jobTitle);
       setUploadProgress(100);
-      setUploadStepText("CV extraction complete!");
+      setUploadStepText("CV processed & saved to your profile!");
 
-      if (res.extracted_profile) {
-        const ext = res.extracted_profile;
+      // The backend now returns the saved profile directly
+      if (savedProfile) {
         setProfile((prev) => ({
           ...prev,
           personal_info: {
             ...prev.personal_info,
-            full_name: ext.personal_info?.full_name || prev.personal_info.full_name,
-            professional_title: ext.personal_info?.professional_title || prev.personal_info.professional_title,
-            email: ext.personal_info?.email || prev.personal_info.email,
-            phone: ext.personal_info?.phone || prev.personal_info.phone,
-            location: ext.personal_info?.location || prev.personal_info.location,
-            linkedin_url: ext.personal_info?.linkedin_url || prev.personal_info.linkedin_url,
-            github_url: ext.personal_info?.github_url || prev.personal_info.github_url,
-            portfolio_url: ext.personal_info?.portfolio_url || prev.personal_info.portfolio_url,
-            summary: ext.personal_info?.summary || prev.personal_info.summary,
+            full_name: savedProfile.personal_info?.full_name || prev.personal_info.full_name,
+            professional_title: savedProfile.personal_info?.professional_title || prev.personal_info.professional_title,
+            email: savedProfile.personal_info?.email || prev.personal_info.email,
+            phone: savedProfile.personal_info?.phone || prev.personal_info.phone,
+            location: savedProfile.personal_info?.location || prev.personal_info.location,
+            linkedin_url: savedProfile.personal_info?.linkedin_url || prev.personal_info.linkedin_url,
+            github_url: savedProfile.personal_info?.github_url || prev.personal_info.github_url,
+            portfolio_url: savedProfile.personal_info?.portfolio_url || prev.personal_info.portfolio_url,
+            summary: savedProfile.personal_info?.summary || prev.personal_info.summary,
           },
-          experience: ext.experience?.length ? ext.experience : prev.experience,
-          education: ext.education?.length ? ext.education : prev.education,
-          skills: ext.skills?.length ? Array.from(new Set([...prev.skills, ...ext.skills])) : prev.skills,
-          projects: ext.projects?.length ? ext.projects : prev.projects,
-          certifications: ext.certifications?.length ? ext.certifications : prev.certifications,
+          experience: savedProfile.experience?.length ? savedProfile.experience : prev.experience,
+          education: savedProfile.education?.length ? savedProfile.education : prev.education,
+          skills: savedProfile.skills?.length ? Array.from(new Set([...prev.skills, ...savedProfile.skills])) : prev.skills,
+          projects: savedProfile.projects?.length ? savedProfile.projects : prev.projects,
+          certifications: savedProfile.certifications?.length ? savedProfile.certifications : prev.certifications,
         }));
         setExtractedNotice(true);
+        setSuccessMsg("Profile auto-saved from your CV! Review your data below.");
+        setTimeout(() => setSuccessMsg(null), 5000);
       }
     } catch (err: any) {
       setUploadError(err.message || "Failed to process CV upload.");
@@ -182,6 +204,51 @@ export default function ProfilePage() {
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to generate resume.");
       setGenerating(false);
+    }
+  };
+
+  // Open the job title modal in "format" mode (for manually entered data)
+  const triggerFormatModal = () => {
+    setFormatModalMode("format");
+    setJobTitleInput(profile.personal_info.professional_title || "");
+    setShowJobTitleModal(true);
+  };
+
+  // Send current profile data through Grok for AI enhancement
+  const handleFormatWithAI = async (jobTitle: string) => {
+    setShowJobTitleModal(false);
+    setFormatting(true);
+    setErrorMsg(null);
+    try {
+      const formatted = await formatProfileWithAI(profile, jobTitle);
+      if (formatted) {
+        setProfile((prev) => ({
+          ...prev,
+          personal_info: {
+            ...prev.personal_info,
+            full_name: formatted.personal_info?.full_name || prev.personal_info.full_name,
+            professional_title: formatted.personal_info?.professional_title || prev.personal_info.professional_title,
+            email: formatted.personal_info?.email || prev.personal_info.email,
+            phone: formatted.personal_info?.phone || prev.personal_info.phone,
+            location: formatted.personal_info?.location || prev.personal_info.location,
+            linkedin_url: formatted.personal_info?.linkedin_url || prev.personal_info.linkedin_url,
+            github_url: formatted.personal_info?.github_url || prev.personal_info.github_url,
+            portfolio_url: formatted.personal_info?.portfolio_url || prev.personal_info.portfolio_url,
+            summary: formatted.personal_info?.summary || prev.personal_info.summary,
+          },
+          experience: formatted.experience?.length ? formatted.experience : prev.experience,
+          education: formatted.education?.length ? formatted.education : prev.education,
+          skills: formatted.skills?.length ? Array.from(new Set([...prev.skills, ...formatted.skills])) : prev.skills,
+          projects: formatted.projects?.length ? formatted.projects : prev.projects,
+          certifications: formatted.certifications?.length ? formatted.certifications : prev.certifications,
+        }));
+        setSuccessMsg("Profile formatted and saved with AI! Review your enhanced data.");
+        setTimeout(() => setSuccessMsg(null), 5000);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to format profile with AI.");
+    } finally {
+      setFormatting(false);
     }
   };
 
@@ -463,6 +530,24 @@ export default function ProfilePage() {
             >
               {saving ? "Saving..." : "Save Profile"}
             </button>
+            <button
+              onClick={triggerFormatModal}
+              disabled={formatting}
+              style={{
+                background: formatting ? "#94A3B8" : "linear-gradient(135deg, #7C3AED, #2563EB)",
+                color: "#FFFFFF",
+                border: "none",
+                padding: "8px 18px",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: formatting ? "not-allowed" : "pointer",
+                boxShadow: formatting ? "none" : "0 2px 8px rgba(124, 58, 237, 0.3)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {formatting ? "⏳ Formatting..." : "✨ Format with AI"}
+            </button>
           </div>
         </header>
 
@@ -602,7 +687,7 @@ export default function ProfilePage() {
                         accept=".pdf,.docx"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
-                            handleFileUpload(e.target.files[0]);
+                            handleFileSelect(e.target.files[0]);
                           }
                         }}
                         style={{ display: "none" }}
@@ -1235,6 +1320,157 @@ export default function ProfilePage() {
             </div>
           )}
         </main>
+
+        {/* Job Title Modal Overlay */}
+        {showJobTitleModal && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              backdropFilter: "blur(4px)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              animation: "modalFadeIn 0.2s ease",
+            }}
+            onClick={() => {
+              setShowJobTitleModal(false);
+              setPendingFile(null);
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "16px",
+                padding: "36px 32px",
+                maxWidth: "480px",
+                width: "90%",
+                boxShadow: "0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(37, 99, 235, 0.1)",
+                animation: "modalSlideUp 0.25s ease",
+              }}
+            >
+              {/* Modal Header */}
+              <div style={{ textAlign: "center", marginBottom: "24px" }}>
+                <div style={{ fontSize: "40px", marginBottom: "12px" }}>🎯</div>
+                <h3 style={{ fontSize: "20px", fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
+                  What position are you targeting?
+                </h3>
+                <p style={{ fontSize: "14px", color: "#64748B", margin: 0, lineHeight: "1.5" }}>
+                  {formatModalMode === "format"
+                    ? "Our AI will enhance your profile data — polishing descriptions, adding impact metrics, and tailoring content for this role."
+                    : "This helps our AI tailor your CV data for the role \u2014 enhancing descriptions, skills, and formatting for maximum ATS impact."}
+                </p>
+              </div>
+
+              {/* Job Title Input */}
+              <div style={{ marginBottom: "24px" }}>
+                <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "8px" }}>
+                  Target Job Title / Position *
+                </label>
+                <input
+                  type="text"
+                  value={jobTitleInput}
+                  onChange={(e) => setJobTitleInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && jobTitleInput.trim()) {
+                      if (formatModalMode === "format") {
+                        handleFormatWithAI(jobTitleInput.trim());
+                      } else if (pendingFile) {
+                        handleFileUpload(pendingFile, jobTitleInput.trim());
+                      }
+                    }
+                  }}
+                  placeholder="e.g. AI Engineer, Full Stack Developer, Data Scientist"
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: "10px",
+                    border: "2px solid #CBD5E1",
+                    fontSize: "15px",
+                    outline: "none",
+                    transition: "border-color 0.2s ease",
+                    boxSizing: "border-box",
+                  }}
+                  onFocus={(e) => (e.target.style.borderColor = "#2563EB")}
+                  onBlur={(e) => (e.target.style.borderColor = "#CBD5E1")}
+                />
+                {formatModalMode === "upload" && pendingFile && (
+                  <div style={{ fontSize: "12px", color: "#64748B", marginTop: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    📎 {pendingFile.name}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Buttons */}
+              <div style={{ display: "flex", gap: "12px" }}>
+                <button
+                  onClick={() => {
+                    setShowJobTitleModal(false);
+                    setPendingFile(null);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "12px 20px",
+                    borderRadius: "10px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#64748B",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "background-color 0.15s ease",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (formatModalMode === "format") {
+                      handleFormatWithAI(jobTitleInput.trim());
+                    } else if (pendingFile) {
+                      handleFileUpload(pendingFile, jobTitleInput.trim());
+                    }
+                  }}
+                  disabled={!jobTitleInput.trim()}
+                  style={{
+                    flex: 2,
+                    padding: "12px 20px",
+                    borderRadius: "10px",
+                    border: "none",
+                    backgroundColor: jobTitleInput.trim() ? "#2563EB" : "#94A3B8",
+                    color: "#FFFFFF",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    cursor: jobTitleInput.trim() ? "pointer" : "not-allowed",
+                    transition: "background-color 0.2s ease",
+                    boxShadow: jobTitleInput.trim() ? "0 4px 12px rgba(37, 99, 235, 0.3)" : "none",
+                  }}
+                >
+                  {formatModalMode === "format" ? "✨ Format Profile with AI" : "🚀 Process CV with AI"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal animations */}
+        <style>{`
+          @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes modalSlideUp {
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+          }
+        `}</style>
       </div>
     </ProtectedRoute>
   );
