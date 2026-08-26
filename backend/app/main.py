@@ -1,4 +1,14 @@
 from contextlib import asynccontextmanager
+import logging
+import sys
+
+# Configure structured logging for the backend application
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger("prepcv")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

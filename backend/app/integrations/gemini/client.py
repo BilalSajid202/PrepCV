@@ -213,17 +213,38 @@ async def format_cv_with_gemini(
         clean_profile.pop("_raw_text", None)
         return clean_profile
 
-    system_instruction = f"""You are an elite career coach and ATS resume strategist.
-Your task is to take candidate data and produce an ATS-optimized, high-impact candidate profile JSON object tailored for the target role: "{clean_job_title}".
+    system_instruction = f"""You are an elite career coach and ATS resume parsing strategist.
+Your task is to take raw candidate resume data (which may come from diverse resume layouts: dense paragraphs, multi-column tables, pipe-separated rows, unconventional headings, or list styles) and convert it into a structured, ATS-optimized candidate profile JSON object tailored for the target role: "{clean_job_title}".
 
-Guidelines:
-1. Target Role: "{clean_job_title}".
-2. Set "personal_info.professional_title" to "{clean_job_title}" if appropriate.
-3. Write a compelling, concise 3-4 sentence professional summary in "personal_info.summary" highlighting strengths for this target role.
-4. For all experience items, rewrite achievement bullets to begin with powerful action verbs (e.g. Engineered, Spearheaded, Optimized, Delivered) and include quantifiable metrics where plausible.
-5. Cleanly standardize skills, education, and project descriptions.
-6. Preserve all genuine user facts (names, companies, degrees, dates).
-7. Return ONLY valid JSON matching this schema:
+Parsing & Formatting Rules for Diverse CV Styles:
+1. PARAGRAPH / PROSE STYLES:
+   - If work experiences or projects are written as narrative prose or long paragraphs, decompose them into 2-5 distinct, high-impact bullet points in "achievements".
+   - Start each bullet point with a powerful past-tense action verb (e.g., Engineered, Spearheaded, Architected, Optimized, Deployed, Automated).
+
+2. TABLES & COLUMNAR LAYOUTS:
+   - If text contains pipe symbols (`|`), tabs, or side-by-side columnar data from tables (e.g. "Google | Senior Backend Engineer | 2021 - 2024 | Mountain View, CA"), accurately parse each field into its proper key (company, position, start_date, end_date, location).
+
+3. DIVERSE / NON-STANDARD HEADINGS:
+   - Map unconventional section titles accurately:
+     * Experience: "Career History", "Employment", "Work Experience", "Professional Background", "Engagements", "Where I've Worked" -> experience
+     * Education: "Academics", "Qualifications", "Degrees", "Academic Background", "Schooling" -> education
+     * Skills: "Technical Tooling", "Tech Stack", "Proficiencies", "Competencies", "Expertise", "Core Tools" -> skills
+     * Projects: "Featured Work", "Portfolio", "Open Source", "Selected Builds", "Key Initiatives" -> projects
+     * Certifications: "Accreditations", "Licenses", "Courses & Certifications", "Credentials" -> certifications
+
+4. DATES & METADATA NORMALIZATION:
+   - Normalize varied date expressions (e.g., "06/2020", "June 2020", "2020 - Present", "2021 -- 2023", "Current") into clean standard representations (e.g., "Jun 2020", "Present").
+   - Set "is_current" to true if the role or degree is ongoing.
+
+5. IMPLICIT SKILLS EXTRACTION:
+   - Scan all experience bullets, summaries, and project descriptions for tools, frameworks, languages, and methodologies (e.g. Docker, PostgreSQL, React, AWS, PyTorch, CI/CD). Include them in the "skills" list and deduplicate.
+
+6. TARGET ROLE TAILORING:
+   - Target Role: "{clean_job_title}".
+   - Write a concise 3-4 sentence professional summary in "personal_info.summary" showcasing the candidate's strongest qualifications for this role.
+   - Preserve all authentic candidate facts (names, companies, schools, real metrics). Never invent fake employment history.
+
+Return ONLY valid JSON matching this schema:
 {{
   "personal_info": {{
     "full_name": "string",

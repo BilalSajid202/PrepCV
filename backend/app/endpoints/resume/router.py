@@ -1,7 +1,7 @@
 import logging
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_logic.profile import get_user_profile
@@ -12,6 +12,7 @@ from app.business_logic.resume_generator import (
     improve_bullet_with_ai,
     prepare_resume_render_data,
     render_resume_html,
+    render_resume_docx,
     save_generated_resume,
 )
 from app.database.models import User
@@ -30,6 +31,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["ATS Resume Builder"])
 
+
+# ===========================================================================
+# STATIC ROUTES — must come BEFORE any /{resume_id} parameterized routes
+# so FastAPI doesn't swallow them as path parameters.
+# ===========================================================================
 
 @router.post("/generate", response_model=ResumeResponse)
 async def generate_resume(
@@ -108,6 +114,44 @@ async def list_resumes(
     ]
 
 
+@router.post("/ai-improve", response_model=AIImproveResponse)
+async def ai_improve(
+    req: AIImproveRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """AI action endpoint to refine section text or bullet point."""
+    res = await improve_bullet_with_ai(
+        section=req.section,
+        original_text=req.text,
+        instruction=req.instruction or "Improve for impact"
+    )
+    return AIImproveResponse(
+        original_text=req.text,
+        improved_text=res.get("improved_text", req.text),
+        explanation=res.get("explanation", "Improved with action verbs and impact formatting.")
+    )
+
+
+@router.post("/render-preview")
+async def render_preview_html(
+    req: ResumeUpdateRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Render dynamic HTML directly from submitted resume content without saving or LLM calls."""
+    content_dict = req.content.model_dump() if req.content else {}
+    render_data = prepare_resume_render_data(
+        profile_snapshot={"personal_info": {"full_name": current_user.full_name, "email": current_user.email}},
+        content=content_dict
+    )
+    html_content = render_resume_html(render_data)
+    return {"html": html_content}
+
+
+# ===========================================================================
+# PARAMETERIZED ROUTES — /{resume_id} and sub-paths.
+# These MUST come after all static routes above.
+# ===========================================================================
+
 @router.get("/{resume_id}", response_model=ResumeResponse)
 async def get_resume(
     resume_id: str,
@@ -167,24 +211,6 @@ async def update_resume(
     )
 
 
-@router.post("/ai-improve", response_model=AIImproveResponse)
-async def ai_improve(
-    req: AIImproveRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """AI action endpoint to refine section text or bullet point."""
-    res = await improve_bullet_with_ai(
-        section=req.section,
-        original_text=req.text,
-        instruction=req.instruction or "Improve for impact"
-    )
-    return AIImproveResponse(
-        original_text=req.text,
-        improved_text=res.get("improved_text", req.text),
-        explanation=res.get("explanation", "Improved with action verbs and impact formatting.")
-    )
-
-
 @router.get("/{resume_id}/html", response_class=HTMLResponse)
 async def get_resume_html(
     resume_id: str,
@@ -192,31 +218,64 @@ async def get_resume_html(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Render dynamic ATS-optimized HTML for a specific resume without LLM calls."""
+    logger.info(f"==> [Resume HTML] Request for resume_id='{resume_id}', user_id='{current_user.id}' ({current_user.email})")
     resume = await get_resume_by_id(db, resume_id, current_user.id)
     if not resume:
+        logger.warning(f"==> [Resume HTML] Resume '{resume_id}' not found for user '{current_user.id}'")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Resume not found."
+            detail=f"Resume '{resume_id}' not found."
         )
 
-    render_data = prepare_resume_render_data(
-        profile_snapshot=resume.profile_snapshot or {},
-        content=resume.content or {}
-    )
-    html_content = render_resume_html(render_data)
-    return HTMLResponse(content=html_content)
+    try:
+        render_data = prepare_resume_render_data(
+            profile_snapshot=resume.profile_snapshot or {},
+            content=resume.content or {}
+        )
+        html_content = render_resume_html(render_data)
+        logger.info(f"==> [Resume HTML] Successfully generated HTML ({len(html_content)} bytes) for '{resume_id}'")
+        return HTMLResponse(content=html_content)
+    except Exception as e:
+        logger.error(f"==> [Resume HTML] Rendering error for '{resume_id}': {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error rendering resume HTML: {str(e)}"
+        )
 
 
-@router.post("/render-preview")
-async def render_preview_html(
-    req: ResumeUpdateRequest,
+@router.get("/{resume_id}/docx")
+async def get_resume_docx(
+    resume_id: str,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
 ):
-    """Render dynamic HTML directly from submitted resume content without saving or LLM calls."""
-    content_dict = req.content.model_dump() if req.content else {}
-    render_data = prepare_resume_render_data(
-        profile_snapshot={"personal_info": {"full_name": current_user.full_name, "email": current_user.email}},
-        content=content_dict
-    )
-    html_content = render_resume_html(render_data)
-    return {"html": html_content}
+    """Generate and export ATS-safe Word (.docx) document for a resume without LLM calls."""
+    logger.info(f"==> [Resume DOCX] Request for resume_id='{resume_id}', user_id='{current_user.id}' ({current_user.email})")
+    resume = await get_resume_by_id(db, resume_id, current_user.id)
+    if not resume:
+        logger.warning(f"==> [Resume DOCX] Resume '{resume_id}' not found for user '{current_user.id}'")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Resume '{resume_id}' not found."
+        )
+
+    try:
+        render_data = prepare_resume_render_data(
+            profile_snapshot=resume.profile_snapshot or {},
+            content=resume.content or {}
+        )
+        docx_stream = render_resume_docx(render_data)
+        safe_filename = "".join(c for c in (resume.title or "Resume") if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_")
+        filename = f"{safe_filename}.docx"
+        logger.info(f"==> [Resume DOCX] Successfully generated DOCX for '{resume_id}' ({filename})")
+        return StreamingResponse(
+            docx_stream,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        logger.error(f"==> [Resume DOCX] Rendering error for '{resume_id}': {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating DOCX resume: {str(e)}"
+        )

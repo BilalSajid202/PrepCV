@@ -82,7 +82,7 @@ export interface CandidateProfile {
 }
 
 export interface ResumeContent {
-  personal_info?: PersonalInfo;
+  personal_info?: Partial<PersonalInfo>;
   summary: string;
   experience: ExperienceItem[];
   education: EducationItem[];
@@ -207,7 +207,14 @@ export async function fetchResumeHtml(id: string): Promise<string> {
   const url = `${API_BASE_URL}/api/resumes/${id}/html`;
   const response = await fetch(url, { headers, credentials: "include" });
   if (!response.ok) {
-    throw new Error("Failed to fetch resume HTML.");
+    const errorText = await response.text().catch(() => "");
+    let detail = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed.detail) detail = parsed.detail;
+    } catch {}
+    console.warn(`[PrepCV] Fetch resume HTML status ${response.status}:`, detail);
+    throw new Error(`Failed to fetch resume HTML (${response.status}): ${detail || response.statusText}`);
   }
   return response.text();
 }
@@ -218,4 +225,26 @@ export async function fetchPreviewHtml(content: ResumeContent): Promise<string> 
     body: JSON.stringify({ content }),
   });
   return data.html;
+}
+
+export async function downloadResumeDocx(id: string, filename: string = "Resume.docx"): Promise<void> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("prepcv_token") : null;
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const url = `${API_BASE_URL}/api/resumes/${id}/docx`;
+  const response = await fetch(url, { headers, credentials: "include" });
+  if (!response.ok) {
+    throw new Error(`Failed to download Word document (${response.status})`);
+  }
+  const blob = await response.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = filename.endsWith(".docx") ? filename : `${filename}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(downloadUrl);
 }

@@ -127,8 +127,197 @@ def render_resume_pdf(data: dict, output_path: str) -> None:
         raise RuntimeError("WeasyPrint is not installed on this server.")
 
 
+def render_resume_docx(data: dict) -> "io.BytesIO":
+    """Render structured resume data into an ATS-safe Word (.docx) document."""
+    import io
+    import docx
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import parse_xml
+
+    doc = docx.Document()
+
+    # 0.5 inch page margins (ATS standard)
+    for section in doc.sections:
+        section.top_margin = Inches(0.5)
+        section.bottom_margin = Inches(0.5)
+        section.left_margin = Inches(0.6)
+        section.right_margin = Inches(0.6)
+
+    personal_info = data.get("personal_info") or {}
+
+    def format_run(run, font_name="Georgia", size_pt=10, bold=False, italic=False, color_rgb=(26, 26, 26)):
+        run.font.name = font_name
+        run.font.size = Pt(size_pt)
+        run.bold = bold
+        run.italic = italic
+        run.font.color.rgb = RGBColor(*color_rgb)
+
+    # 1. Header (Name, Title, Contact)
+    name_p = doc.add_paragraph()
+    name_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name_p.paragraph_format.space_before = Pt(0)
+    name_p.paragraph_format.space_after = Pt(2)
+    r = name_p.add_run(personal_info.get("full_name") or "Candidate Name")
+    format_run(r, font_name="Georgia", size_pt=20, bold=True, color_rgb=(26, 26, 26))
+
+    if personal_info.get("professional_title"):
+        title_p = doc.add_paragraph()
+        title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        title_p.paragraph_format.space_before = Pt(0)
+        title_p.paragraph_format.space_after = Pt(4)
+        r = title_p.add_run(personal_info["professional_title"])
+        format_run(r, font_name="Georgia", size_pt=11, color_rgb=(60, 60, 60))
+
+    contact_parts = []
+    if personal_info.get("phone"): contact_parts.append(personal_info["phone"])
+    if personal_info.get("email"): contact_parts.append(personal_info["email"])
+    if personal_info.get("location"): contact_parts.append(personal_info["location"])
+    if personal_info.get("linkedin_url"): contact_parts.append("LinkedIn")
+    if personal_info.get("github_url"): contact_parts.append("GitHub")
+    if personal_info.get("portfolio_url"): contact_parts.append("Portfolio")
+
+    if contact_parts:
+        contact_p = doc.add_paragraph()
+        contact_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        contact_p.paragraph_format.space_before = Pt(0)
+        contact_p.paragraph_format.space_after = Pt(8)
+        contact_str = "  ◇  ".join(contact_parts)
+        r = contact_p.add_run(contact_str)
+        format_run(r, font_name="Georgia", size_pt=9.5, color_rgb=(60, 60, 60))
+
+    def add_section_heading(title: str):
+        sec_p = doc.add_paragraph()
+        sec_p.paragraph_format.space_before = Pt(10)
+        sec_p.paragraph_format.space_after = Pt(4)
+        r = sec_p.add_run(title.upper())
+        format_run(r, font_name="Georgia", size_pt=10.5, bold=True, color_rgb=(26, 26, 26))
+        try:
+            pPr = sec_p._p.get_or_add_pPr()
+            pBdr = parse_xml(r'<w:pBdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:bottom w:val="single" w:sz="8" w:space="2" w:color="1A1A1A"/></w:pBdr>')
+            pPr.append(pBdr)
+        except Exception:
+            pass
+
+    # 2. Summary
+    if personal_info.get("summary"):
+        add_section_heading("Summary")
+        sum_p = doc.add_paragraph()
+        sum_p.paragraph_format.space_before = Pt(2)
+        sum_p.paragraph_format.space_after = Pt(6)
+        r = sum_p.add_run(personal_info["summary"])
+        format_run(r, font_name="Georgia", size_pt=10, color_rgb=(26, 26, 26))
+
+    # 3. Experience
+    experience = data.get("experience") or []
+    if experience:
+        add_section_heading("Experience")
+        for exp in experience:
+            head_p = doc.add_paragraph()
+            head_p.paragraph_format.space_before = Pt(4)
+            head_p.paragraph_format.space_after = Pt(1)
+            r_pos = head_p.add_run(exp.get("position") or "")
+            format_run(r_pos, font_name="Georgia", size_pt=10.5, bold=True)
+
+            dates_str = f" ({exp.get('start_date', '')} — {'Present' if exp.get('is_current') else exp.get('end_date', '')})"
+            r_date = head_p.add_run(dates_str)
+            format_run(r_date, font_name="Georgia", size_pt=9.5, italic=True, color_rgb=(80, 80, 80))
+
+            if exp.get("company") or exp.get("location"):
+                sub_p = doc.add_paragraph()
+                sub_p.paragraph_format.space_before = Pt(0)
+                sub_p.paragraph_format.space_after = Pt(2)
+                sub_text = exp.get("company", "") + (f", {exp['location']}" if exp.get("location") else "")
+                r_sub = sub_p.add_run(sub_text)
+                format_run(r_sub, font_name="Georgia", size_pt=9.5, italic=True, color_rgb=(60, 60, 60))
+
+            for bullet in exp.get("achievements") or []:
+                if bullet and bullet.strip() and bullet.strip() not in ("•", "-"):
+                    b_p = doc.add_paragraph(style='List Bullet')
+                    b_p.paragraph_format.space_before = Pt(1)
+                    b_p.paragraph_format.space_after = Pt(2)
+                    r_b = b_p.add_run(bullet.strip())
+                    format_run(r_b, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+
+    # 4. Projects
+    projects = data.get("projects") or []
+    if projects:
+        add_section_heading("Projects")
+        for proj in projects:
+            p_p = doc.add_paragraph()
+            p_p.paragraph_format.space_before = Pt(4)
+            p_p.paragraph_format.space_after = Pt(2)
+            r_pn = p_p.add_run(proj.get("name", ""))
+            format_run(r_pn, font_name="Georgia", size_pt=10.5, bold=True)
+
+            if proj.get("description"):
+                desc_p = doc.add_paragraph()
+                desc_p.paragraph_format.space_before = Pt(0)
+                desc_p.paragraph_format.space_after = Pt(4)
+                r_pd = desc_p.add_run(proj["description"])
+                format_run(r_pd, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+
+            for bullet in proj.get("achievements") or []:
+                if bullet and bullet.strip() and bullet.strip() not in ("•", "-"):
+                    b_p = doc.add_paragraph(style='List Bullet')
+                    b_p.paragraph_format.space_before = Pt(1)
+                    b_p.paragraph_format.space_after = Pt(2)
+                    r_b = b_p.add_run(bullet.strip())
+                    format_run(r_b, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+
+    # 5. Skills
+    skills = data.get("skills") or []
+    if skills:
+        add_section_heading("Skills")
+        sk_p = doc.add_paragraph()
+        sk_p.paragraph_format.space_before = Pt(2)
+        sk_p.paragraph_format.space_after = Pt(6)
+        r_pre = sk_p.add_run("Technical Proficiencies — ")
+        format_run(r_pre, font_name="Georgia", size_pt=9.5, bold=True)
+        r_sk = sk_p.add_run(", ".join(skills))
+        format_run(r_sk, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+
+    # 6. Education
+    education = data.get("education") or []
+    if education:
+        add_section_heading("Education")
+        for edu in education:
+            edu_p = doc.add_paragraph()
+            edu_p.paragraph_format.space_before = Pt(3)
+            edu_p.paragraph_format.space_after = Pt(3)
+            edu_title = edu.get("degree", "") + (f" in {edu['field_of_study']}" if edu.get("field_of_study") else "") + (f", {edu['institution']}" if edu.get("institution") else "")
+            r_ed = edu_p.add_run(edu_title)
+            format_run(r_ed, font_name="Georgia", size_pt=10, bold=True)
+
+            dates_str = f" ({edu.get('start_date', '')} — {'Present' if edu.get('is_current') else edu.get('end_date', '')})"
+            r_dt = edu_p.add_run(dates_str)
+            format_run(r_dt, font_name="Georgia", size_pt=9.5, italic=True, color_rgb=(80, 80, 80))
+
+    # 7. Certifications
+    certifications = data.get("certifications") or []
+    if certifications:
+        add_section_heading("Certifications")
+        for cert in certifications:
+            cert_p = doc.add_paragraph()
+            cert_p.paragraph_format.space_before = Pt(2)
+            cert_p.paragraph_format.space_after = Pt(2)
+            r_c = cert_p.add_run(cert.get("name", ""))
+            format_run(r_c, font_name="Georgia", size_pt=9.5, bold=True)
+            if cert.get("issuing_organization"):
+                r_o = cert_p.add_run(f" — {cert['issuing_organization']}")
+                format_run(r_o, font_name="Georgia", size_pt=9.5)
+            if cert.get("issue_date"):
+                r_cd = cert_p.add_run(f" ({cert['issue_date']})")
+                format_run(r_cd, font_name="Georgia", size_pt=9, italic=True, color_rgb=(80, 80, 80))
+
+    stream = io.BytesIO()
+    doc.save(stream)
+    stream.seek(0)
+    return stream
+
+
 def prepare_resume_render_data(profile_snapshot: Dict[str, Any], content: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge profile snapshot and edited resume content into standard structure for HTML rendering."""
+    """Merge profile snapshot and edited resume content into standard structure for HTML/DOCX rendering."""
     personal_info = dict(content.get("personal_info") or profile_snapshot.get("personal_info") or {})
     if not personal_info.get("summary") and content.get("summary"):
         personal_info["summary"] = content.get("summary")

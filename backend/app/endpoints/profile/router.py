@@ -102,9 +102,13 @@ async def upload_cv(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Upload CV/Resume (PDF or DOCX), extract text, format with Grok LLM using
+    """Upload CV/Resume (PDF or DOCX), extract text, format with Gemini Flash LLM using
     the target job title for context, and auto-save the structured profile to the database."""
+    logger.info(f"==> [CV Upload] Received upload request from user '{current_user.id}' ({current_user.email})")
+    logger.info(f"==> [CV Upload] Filename: '{file.filename}', Content-Type: '{file.content_type}', Target Job Title: '{job_title}'")
+
     if not file.filename:
+        logger.warning("==> [CV Upload] Rejected: No filename provided.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No file uploaded. Please select a valid PDF (.pdf) or Word (.docx) document."
@@ -112,26 +116,45 @@ async def upload_cv(
 
     lower_name = file.filename.lower()
     if not (lower_name.endswith(".pdf") or lower_name.endswith(".docx")):
+        logger.warning(f"==> [CV Upload] Rejected unsupported extension: {file.filename}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unsupported file format. Only PDF (.pdf) and Word (.docx) documents are allowed."
         )
 
     file_bytes = await file.read()
+    file_size_kb = len(file_bytes) / 1024
+    logger.info(f"==> [CV Upload] Read {len(file_bytes)} bytes ({file_size_kb:.1f} KB) for '{file.filename}'")
+
     if len(file_bytes) == 0:
+        logger.warning("==> [CV Upload] Rejected: File is empty (0 bytes).")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded file is empty (0 bytes). Please upload a valid document."
         )
 
     if len(file_bytes) > 10 * 1024 * 1024:  # 10MB limit
+        logger.warning(f"==> [CV Upload] Rejected: File size ({file_size_kb:.1f} KB) exceeds 10MB limit.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File size exceeds the 10 MB maximum limit."
         )
 
-    raw_text = extract_raw_text_from_file(file_bytes, file.filename)
-    parsed_profile = await parse_cv_text_with_llm(raw_text, job_title=job_title)
+    try:
+        logger.info(f"==> [CV Upload] Extracting text from '{file.filename}'...")
+        raw_text = extract_raw_text_from_file(file_bytes, file.filename)
+        logger.info(f"==> [CV Upload] Extracted {len(raw_text)} characters of text. Sample: {raw_text[:200]!r}")
+    except Exception as e:
+        logger.error(f"==> [CV Upload] Extraction failure: {e}", exc_info=True)
+        raise
+
+    try:
+        logger.info(f"==> [CV Upload] Sending text to LLM parser for role: '{job_title}'...")
+        parsed_profile = await parse_cv_text_with_llm(raw_text, job_title=job_title)
+        logger.info(f"==> [CV Upload] Parsing completed. Found: {len(parsed_profile.get('experience', []))} roles, {len(parsed_profile.get('education', []))} education items, {len(parsed_profile.get('skills', []))} skills.")
+    except Exception as e:
+        logger.error(f"==> [CV Upload] LLM parsing error: {e}", exc_info=True)
+        raise
 
     # Ensure personal_info defaults to user full name and email if missing
     if "personal_info" in parsed_profile:
@@ -139,13 +162,21 @@ async def upload_cv(
             parsed_profile["personal_info"]["full_name"] = current_user.full_name
         if not parsed_profile["personal_info"].get("email"):
             parsed_profile["personal_info"]["email"] = current_user.email
-        # Set professional_title to the provided job title if not already set
         if job_title and not parsed_profile["personal_info"].get("professional_title"):
             parsed_profile["personal_info"]["professional_title"] = job_title
 
     # Auto-save the formatted profile to the database
-    profile_schema = ProfileSchema(**parsed_profile)
-    saved_profile = await save_or_update_profile(db, current_user, profile_schema)
+    try:
+        logger.info(f"==> [CV Upload] Saving profile to database for user '{current_user.id}'...")
+        profile_schema = ProfileSchema(**parsed_profile)
+        saved_profile = await save_or_update_profile(db, current_user, profile_schema)
+        logger.info(f"==> [CV Upload] Profile successfully saved to database with ID '{saved_profile.id}'.")
+    except Exception as e:
+        logger.error(f"==> [CV Upload] Database save error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save parsed profile to database: {str(e)}"
+        )
 
     return ProfileResponse(
         id=saved_profile.id,

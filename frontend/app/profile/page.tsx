@@ -128,8 +128,10 @@ export default function ProfilePage() {
   // Step 1: When user selects a file, validate and show the job title modal
   const handleFileSelect = (file: File) => {
     if (!file) return;
+    console.log("[PrepCV] File selected for upload:", file.name, `(${file.size} bytes, type: ${file.type})`);
     const fileName = file.name.toLowerCase();
     if (!fileName.endsWith(".pdf") && !fileName.endsWith(".docx")) {
+      console.warn("[PrepCV] Invalid file extension selected:", file.name);
       setUploadError("Invalid file type. Only PDF (.pdf) and Word (.docx) documents are allowed.");
       return;
     }
@@ -142,6 +144,8 @@ export default function ProfilePage() {
 
   // Step 2: When user submits the job title, actually upload and process
   const handleFileUpload = async (file: File, jobTitle: string) => {
+    const finalJobTitle = jobTitle.trim() || "General";
+    console.log("[PrepCV] Starting CV upload process for file:", file.name, "with target role:", finalJobTitle);
     setShowJobTitleModal(false);
     setPendingFile(null);
     setIsUploading(true);
@@ -155,10 +159,12 @@ export default function ProfilePage() {
 
       await new Promise((r) => setTimeout(r, 400));
       setUploadProgress(70);
-      const roleLabel = jobTitle || "General";
-      setUploadStepText("Formatting profile for \u201c" + roleLabel + "\u201d role with AI...");
+      setUploadStepText(`Formatting profile for "${finalJobTitle}" role with AI...`);
 
-      const savedProfile = await uploadCVFile(file, jobTitle);
+      console.log("[PrepCV] Sending upload request to API...");
+      const savedProfile = await uploadCVFile(file, finalJobTitle);
+      console.log("[PrepCV] CV upload & formatting API returned:", savedProfile);
+
       setUploadProgress(100);
       setUploadStepText("CV processed & saved to your profile!");
 
@@ -189,6 +195,7 @@ export default function ProfilePage() {
         setTimeout(() => setSuccessMsg(null), 5000);
       }
     } catch (err: any) {
+      console.error("[PrepCV] CV upload error:", err);
       setUploadError(err.message || "Failed to process CV upload.");
     } finally {
       setIsUploading(false);
@@ -688,6 +695,7 @@ export default function ProfilePage() {
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
                             handleFileSelect(e.target.files[0]);
+                            e.target.value = "";
                           }
                         }}
                         style={{ display: "none" }}
@@ -1371,14 +1379,14 @@ export default function ProfilePage() {
               {/* Job Title Input */}
               <div style={{ marginBottom: "24px" }}>
                 <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "8px" }}>
-                  Target Job Title / Position *
+                  Target Job Title / Position <span style={{ color: "#64748B", fontWeight: 400 }}>(Optional - e.g. AI Engineer)</span>
                 </label>
                 <input
                   type="text"
                   value={jobTitleInput}
                   onChange={(e) => setJobTitleInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && jobTitleInput.trim()) {
+                    if (e.key === "Enter") {
                       if (formatModalMode === "format") {
                         handleFormatWithAI(jobTitleInput.trim());
                       } else if (pendingFile) {
@@ -1386,7 +1394,7 @@ export default function ProfilePage() {
                       }
                     }
                   }}
-                  placeholder="e.g. AI Engineer, Full Stack Developer, Data Scientist"
+                  placeholder="e.g. AI Engineer, Full Stack Developer, Data Scientist (or leave blank)"
                   autoFocus
                   style={{
                     width: "100%",
@@ -1403,7 +1411,7 @@ export default function ProfilePage() {
                 />
                 {formatModalMode === "upload" && pendingFile && (
                   <div style={{ fontSize: "12px", color: "#64748B", marginTop: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                    📎 {pendingFile.name}
+                    📎 {pendingFile.name} ({(pendingFile.size / 1024).toFixed(1)} KB)
                   </div>
                 )}
               </div>
@@ -1438,19 +1446,18 @@ export default function ProfilePage() {
                       handleFileUpload(pendingFile, jobTitleInput.trim());
                     }
                   }}
-                  disabled={!jobTitleInput.trim()}
                   style={{
                     flex: 2,
                     padding: "12px 20px",
                     borderRadius: "10px",
                     border: "none",
-                    backgroundColor: jobTitleInput.trim() ? "#2563EB" : "#94A3B8",
+                    backgroundColor: "#2563EB",
                     color: "#FFFFFF",
                     fontSize: "14px",
                     fontWeight: 700,
-                    cursor: jobTitleInput.trim() ? "pointer" : "not-allowed",
+                    cursor: "pointer",
                     transition: "background-color 0.2s ease",
-                    boxShadow: jobTitleInput.trim() ? "0 4px 12px rgba(37, 99, 235, 0.3)" : "none",
+                    boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)",
                   }}
                 >
                   {formatModalMode === "format" ? "✨ Format Profile with AI" : "🚀 Process CV with AI"}

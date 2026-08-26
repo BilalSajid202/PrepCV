@@ -10,6 +10,8 @@ import {
   updateResumeContent,
   aiImproveBullet,
   fetchResumeHtml,
+  fetchPreviewHtml,
+  downloadResumeDocx,
 } from "@/lib/api";
 
 export default function ResumeEditorPage() {
@@ -26,6 +28,7 @@ export default function ResumeEditorPage() {
 
   const [title, setTitle] = useState<string>("ATS Optimized Resume");
   const [content, setContent] = useState<ResumeContent>({
+    personal_info: {},
     summary: "",
     experience: [],
     education: [],
@@ -39,12 +42,20 @@ export default function ResumeEditorPage() {
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [aiSuggestion, setAiSuggestion] = useState<{ text: string; explanation?: string } | null>(null);
 
-  const loadHtmlPreview = async (id: string) => {
+  const loadHtmlPreview = async (id: string, currentContent?: ResumeContent) => {
     try {
       const html = await fetchResumeHtml(id);
       setHtmlPreview(html);
     } catch (err) {
-      console.error("Failed to load HTML preview:", err);
+      console.warn("Fetching HTML via ID failed, falling back to direct render:", err);
+      if (currentContent) {
+        try {
+          const previewHtml = await fetchPreviewHtml(currentContent);
+          setHtmlPreview(previewHtml);
+        } catch (pErr) {
+          console.warn("Could not render in-memory preview:", pErr);
+        }
+      }
     }
   };
 
@@ -55,8 +66,9 @@ export default function ResumeEditorPage() {
         setLoading(true);
         const data = await fetchResumeById(resumeId);
         setTitle(data.title || "ATS Optimized Resume");
+        let loadedContent: ResumeContent | undefined;
         if (data.content) {
-          setContent({
+          loadedContent = {
             personal_info: data.content.personal_info || data.profile_snapshot?.personal_info,
             summary: data.content.summary || "",
             experience: data.content.experience || [],
@@ -64,9 +76,10 @@ export default function ResumeEditorPage() {
             skills: data.content.skills || [],
             projects: data.content.projects || [],
             certifications: data.content.certifications || [],
-          });
+          };
+          setContent(loadedContent);
         }
-        await loadHtmlPreview(resumeId);
+        await loadHtmlPreview(resumeId, loadedContent);
       } catch (err: any) {
         setErrorMsg(err.message || "Failed to load resume.");
       } finally {
@@ -81,7 +94,7 @@ export default function ResumeEditorPage() {
       setSaving(true);
       setErrorMsg(null);
       await updateResumeContent(resumeId, title, content);
-      await loadHtmlPreview(resumeId);
+      await loadHtmlPreview(resumeId, content);
       setSuccessMsg("Resume and dynamic HTML updated successfully!");
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -130,6 +143,8 @@ export default function ResumeEditorPage() {
     setImprovingIndex(null);
   };
 
+  const [exportingDocx, setExportingDocx] = useState<boolean>(false);
+
   const handleDownloadHtml = () => {
     if (!htmlPreview) return;
     const blob = new Blob([htmlPreview], { type: "text/html" });
@@ -143,10 +158,26 @@ export default function ResumeEditorPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportDocx = async () => {
+    if (!resumeId) return;
+    try {
+      setExportingDocx(true);
+      const safeTitle = title.replace(/\s+/g, "_") || "Resume";
+      await downloadResumeDocx(resumeId, `${safeTitle}.docx`);
+      setSuccessMsg("Word document (.docx) exported successfully!");
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to download Word document.");
+    } finally {
+      setExportingDocx(false);
+    }
+  };
+
   const handleExportPDF = () => {
     // If iframe exists, focus and print it, else window.print()
     const iframe = document.getElementById("ats-resume-iframe") as HTMLIFrameElement;
     if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.focus();
       iframe.contentWindow.print();
     } else {
       window.print();
@@ -166,10 +197,6 @@ export default function ResumeEditorPage() {
     );
   }
 
-  const personalInfo = content.summary ? {
-    full_name: title.replace("'s Resume", ""),
-  } : {};
-
   return (
     <ProtectedRoute>
       <div className="resume-editor-container" style={{ minHeight: "100vh", backgroundColor: "#F1F5F9", display: "flex", flexDirection: "column" }}>
@@ -178,40 +205,45 @@ export default function ResumeEditorPage() {
         <header className="no-print" style={{
           backgroundColor: "#FFFFFF",
           borderBottom: "1px solid #E2E8F0",
-          padding: "12px 24px",
+          padding: "16px 24px",
           display: "flex",
-          alignItems: "center",
           justifyContent: "space-between",
-          position: "sticky",
-          top: 0,
-          zIndex: 50
+          alignItems: "center"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div>
             <button
-              onClick={() => router.push("/profile")}
-              style={{ background: "none", border: "1px solid #CBD5E1", padding: "6px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 500, cursor: "pointer", color: "#475569" }}
+              onClick={() => router.push("/dashboard")}
+              style={{ background: "none", border: "none", color: "#64748B", fontSize: "14px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}
             >
-              ← Profile
+              ← Back to Dashboard
             </button>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", border: "1px solid transparent", padding: "4px 8px", borderRadius: "6px" }}
+              style={{
+                fontSize: "18px",
+                fontWeight: 700,
+                color: "#0F172A",
+                border: "1px solid transparent",
+                borderRadius: "4px",
+                padding: "2px 6px",
+                backgroundColor: "transparent",
+                outline: "none"
+              }}
               onFocus={(e) => e.target.style.borderColor = "#CBD5E1"}
               onBlur={(e) => e.target.style.borderColor = "transparent"}
             />
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            {/* ATS Readiness Badge */}
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
               onClick={() => setShowAtsModal(true)}
               style={{
                 backgroundColor: "#F0FDF4",
                 color: "#16A34A",
                 border: "1px solid #BBF7D0",
-                padding: "6px 14px",
+                padding: "8px 14px",
                 borderRadius: "20px",
                 fontSize: "13px",
                 fontWeight: 700,
@@ -248,6 +280,45 @@ export default function ResumeEditorPage() {
                 backgroundColor: "#0284C7",
                 color: "#FFFFFF",
                 border: "none",
+                padding: "8px 14px",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              📄 HTML
+            </button>
+
+            <button
+              onClick={handleExportDocx}
+              disabled={exportingDocx}
+              style={{
+                backgroundColor: "#0D9488",
+                color: "#FFFFFF",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: exportingDocx ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              {exportingDocx ? "Exporting..." : "📝 Export Word (.docx)"}
+            </button>
+
+            <button
+              onClick={handleExportPDF}
+              style={{
+                backgroundColor: "#0F172A",
+                color: "#FFFFFF",
+                border: "none",
                 padding: "8px 16px",
                 borderRadius: "6px",
                 fontSize: "14px",
@@ -258,23 +329,7 @@ export default function ResumeEditorPage() {
                 gap: "6px"
               }}
             >
-              📄 Download HTML
-            </button>
-
-            <button
-              onClick={handleExportPDF}
-              style={{
-                backgroundColor: "#0F172A",
-                color: "#FFFFFF",
-                border: "none",
-                padding: "8px 18px",
-                borderRadius: "6px",
-                fontSize: "14px",
-                fontWeight: 600,
-                cursor: "pointer"
-              }}
-            >
-              Export PDF ↓
+              📑 Export PDF
             </button>
           </div>
         </header>
@@ -383,10 +438,10 @@ export default function ResumeEditorPage() {
           </div>
 
           {/* Right Live ATS Document Preview */}
-          <div style={{ flex: 1, padding: "32px", overflowY: "auto", display: "flex", justifyContent: "center" }}>
+          <div style={{ flex: 1, padding: "20px", overflowY: "auto", display: "flex", justifyContent: "center" }}>
             
             {htmlPreview ? (
-              <div style={{ width: "210mm", minHeight: "297mm", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", borderRadius: "4px", overflow: "hidden", backgroundColor: "#FFFFFF" }}>
+              <div style={{ width: "100%", maxWidth: "850px", minHeight: "297mm", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", borderRadius: "4px", overflow: "hidden", backgroundColor: "#FFFFFF" }}>
                 <iframe
                   id="ats-resume-iframe"
                   srcDoc={htmlPreview}
@@ -403,63 +458,171 @@ export default function ResumeEditorPage() {
               </div>
             ) : (
               <div className="ats-resume-paper" style={{
-                width: "210mm",
+                width: "100%",
+                maxWidth: "850px",
                 minHeight: "297mm",
                 backgroundColor: "#FFFFFF",
-                color: "#0F172A",
-                fontFamily: "Inter, Arial, sans-serif",
-                padding: "40px 48px",
+                color: "#1a1a1a",
+                fontFamily: '"Georgia", "Times New Roman", Times, serif',
+                padding: "24px 32px 30px",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-                borderRadius: "2px",
-                lineHeight: 1.5
+                borderRadius: "4px",
+                lineHeight: 1.45,
+                fontSize: "14px"
               }}>
                 
                 {/* ATS Resume Header */}
-                <div style={{ textAlign: "center", borderBottom: "2px solid #0F172A", paddingBottom: "16px", marginBottom: "20px" }}>
-                  <h1 style={{ fontSize: "26px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 6px 0", color: "#0F172A" }}>
-                    {title.replace("'s Resume", "").replace("Resume", "").trim() || "CANDIDATE NAME"}
+                <header style={{ textAlign: "center", marginBottom: "14px" }}>
+                  <h1 style={{ fontSize: "28px", fontWeight: "bold", letterSpacing: "0.5px", margin: "0 0 4px 0", color: "#1a1a1a" }}>
+                    {content.personal_info?.full_name || (title && !title.includes("ATS") ? title.replace("'s Resume", "") : "Candidate Name")}
                   </h1>
-                </div>
+                  {content.personal_info?.professional_title && (
+                    <div style={{ fontSize: "14.5px", color: "#333333", marginBottom: "6px" }}>
+                      {content.personal_info.professional_title}
+                    </div>
+                  )}
+                  <div style={{ fontSize: "13px", color: "#333333", display: "flex", justifyContent: "center", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                    {content.personal_info?.phone && (
+                      <span><a href={`tel:${content.personal_info.phone}`} style={{ color: "#0b5cab", textDecoration: "none" }}>{content.personal_info.phone}</a></span>
+                    )}
+                    {content.personal_info?.phone && content.personal_info?.email && <span>&#9671;</span>}
+                    {content.personal_info?.email && (
+                      <span><a href={`mailto:${content.personal_info.email}`} style={{ color: "#0b5cab", textDecoration: "none" }}>{content.personal_info.email}</a></span>
+                    )}
+                    {content.personal_info?.email && content.personal_info?.location && <span>&#9671;</span>}
+                    {content.personal_info?.location && <span>{content.personal_info.location}</span>}
+                    {content.personal_info?.location && content.personal_info?.linkedin_url && <span>&#9671;</span>}
+                    {content.personal_info?.linkedin_url && (
+                      <span><a href={content.personal_info.linkedin_url.startsWith("http") ? content.personal_info.linkedin_url : `https://${content.personal_info.linkedin_url}`} target="_blank" rel="noreferrer" style={{ color: "#0b5cab", textDecoration: "none" }}>LinkedIn</a></span>
+                    )}
+                    {content.personal_info?.linkedin_url && content.personal_info?.github_url && <span>&#9671;</span>}
+                    {content.personal_info?.github_url && (
+                      <span><a href={content.personal_info.github_url.startsWith("http") ? content.personal_info.github_url : `https://${content.personal_info.github_url}`} target="_blank" rel="noreferrer" style={{ color: "#0b5cab", textDecoration: "none" }}>GitHub</a></span>
+                    )}
+                    {content.personal_info?.github_url && content.personal_info?.portfolio_url && <span>&#9671;</span>}
+                    {content.personal_info?.portfolio_url && (
+                      <span><a href={content.personal_info.portfolio_url.startsWith("http") ? content.personal_info.portfolio_url : `https://${content.personal_info.portfolio_url}`} target="_blank" rel="noreferrer" style={{ color: "#0b5cab", textDecoration: "none" }}>Portfolio</a></span>
+                    )}
+                  </div>
+                </header>
 
                 {/* Professional Summary */}
                 {content.summary && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "8px" }}>
-                      Professional Summary
+                  <section style={{ marginTop: "14px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", background: "#efefef", borderBottom: "1.5px solid #1a1a1a", padding: "2px 6px", margin: "0 0 8px 0" }}>
+                      Summary
                     </h2>
-                    <p style={{ fontSize: "13px", color: "#334155", margin: 0, textAlign: "justify" }}>
+                    <p style={{ margin: 0, textAlign: "justify" }}>
                       {content.summary}
                     </p>
-                  </div>
+                  </section>
                 )}
 
                 {/* Work Experience */}
                 {content.experience && content.experience.length > 0 && (
-                  <div style={{ marginBottom: "20px" }}>
-                    <h2 style={{ fontSize: "14px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#0F172A", borderBottom: "1px solid #CBD5E1", paddingBottom: "4px", marginBottom: "12px" }}>
-                      Work Experience
+                  <section style={{ marginTop: "14px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", background: "#efefef", borderBottom: "1.5px solid #1a1a1a", padding: "2px 6px", margin: "0 0 8px 0" }}>
+                      Experience
                     </h2>
                     {content.experience.map((exp, idx) => (
-                      <div key={idx} style={{ marginBottom: "14px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                          <strong style={{ fontSize: "14px", color: "#0F172A" }}>{exp.position}</strong>
-                          <span style={{ fontSize: "12px", color: "#475569", fontWeight: 600 }}>
-                            {exp.start_date ? `${exp.start_date} - ${exp.end_date || (exp.is_current ? "Present" : "Present")}` : (exp.end_date || "Present")}
+                      <div key={idx} style={{ marginBottom: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
+                          <strong style={{ fontSize: "14px" }}>{exp.position}</strong>
+                          <span style={{ fontSize: "13px", fontStyle: "italic", color: "#333333", whiteSpace: "nowrap" }}>
+                            {exp.start_date ? `${exp.start_date} — ${exp.end_date || (exp.is_current ? "Present" : "Present")}` : (exp.end_date || "Present")}
                           </span>
                         </div>
-                        <div style={{ fontSize: "13px", color: "#475569", fontStyle: "italic", marginBottom: "6px" }}>
-                          {exp.company} {exp.location ? `• ${exp.location}` : ""}
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontStyle: "italic", color: "#333333", marginBottom: "3px" }}>
+                          <span>{exp.company}</span>
+                          {exp.location && <span>{exp.location}</span>}
                         </div>
                         {exp.achievements && exp.achievements.length > 0 && (
-                          <ul style={{ margin: "4px 0 0 0", paddingLeft: "18px", fontSize: "13px", color: "#334155" }}>
+                          <ul style={{ margin: "4px 0 0 0", paddingLeft: "20px" }}>
                             {exp.achievements.map((bullet, bIdx) => (
-                              <li key={bIdx} style={{ marginBottom: "4px" }}>{bullet}</li>
+                              <li key={bIdx} style={{ marginBottom: "3px" }}>{bullet}</li>
                             ))}
                           </ul>
                         )}
                       </div>
                     ))}
-                  </div>
+                  </section>
+                )}
+
+                {/* Projects */}
+                {content.projects && content.projects.length > 0 && (
+                  <section style={{ marginTop: "14px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", background: "#efefef", borderBottom: "1.5px solid #1a1a1a", padding: "2px 6px", margin: "0 0 8px 0" }}>
+                      Projects
+                    </h2>
+                    {content.projects.map((proj, idx) => {
+                      const validBullets = (proj.achievements || []).filter(
+                        (b) => b && b.trim() !== "" && b.trim() !== "•" && b.trim() !== "-"
+                      );
+                      return (
+                        <div key={idx} style={{ marginBottom: "10px" }}>
+                          <strong style={{ fontSize: "14px", display: "block", marginBottom: "2px" }}>{proj.name}</strong>
+                          {proj.description && <p style={{ margin: 0, textAlign: "justify" }}>{proj.description}</p>}
+                          {validBullets.length > 0 && (
+                            <ul style={{ margin: "4px 0 0 0", paddingLeft: "20px" }}>
+                              {validBullets.map((bullet, bIdx) => (
+                                <li key={bIdx} style={{ marginBottom: "3px" }}>{bullet.trim()}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </section>
+                )}
+
+                {/* Technical Skills */}
+                {content.skills && content.skills.length > 0 && (
+                  <section style={{ marginTop: "14px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", background: "#efefef", borderBottom: "1.5px solid #1a1a1a", padding: "2px 6px", margin: "0 0 8px 0" }}>
+                      Skills
+                    </h2>
+                    <div style={{ lineHeight: 1.5 }}>
+                      <strong>Technical Proficiencies —</strong> {content.skills.join(", ")}
+                    </div>
+                  </section>
+                )}
+
+                {/* Education */}
+                {content.education && content.education.length > 0 && (
+                  <section style={{ marginTop: "14px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", background: "#efefef", borderBottom: "1.5px solid #1a1a1a", padding: "2px 6px", margin: "0 0 8px 0" }}>
+                      Education
+                    </h2>
+                    {content.education.map((edu, idx) => (
+                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
+                        <div>
+                          <strong>{edu.degree}</strong>{edu.field_of_study ? ` in ${edu.field_of_study}` : ""}{edu.institution ? `, ${edu.institution}` : ""}
+                        </div>
+                        <div style={{ textAlign: "right", fontSize: "13px", fontStyle: "italic", color: "#333333" }}>
+                          {edu.start_date ? `${edu.start_date} — ${edu.end_date || "Present"}` : edu.end_date}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                )}
+
+                {/* Certifications */}
+                {content.certifications && content.certifications.length > 0 && (
+                  <section style={{ marginTop: "14px" }}>
+                    <h2 style={{ fontSize: "14px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", background: "#efefef", borderBottom: "1.5px solid #1a1a1a", padding: "2px 6px", margin: "0 0 8px 0" }}>
+                      Certifications
+                    </h2>
+                    {content.certifications.map((cert, idx) => (
+                      <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
+                        <div>
+                          <strong>{cert.name}</strong>{cert.issuing_organization ? ` — ${cert.issuing_organization}` : ""}
+                        </div>
+                        <div style={{ fontSize: "13px", color: "#333333" }}>
+                          {cert.issue_date}{cert.expiration_date ? ` — ${cert.expiration_date}` : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
                 )}
               </div>
             )}
@@ -554,24 +717,43 @@ export default function ResumeEditorPage() {
 
         {/* Global Print Media Rules */}
         <style jsx global>{`
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm !important;
+          }
           @media print {
-            .no-print {
-              display: none !important;
+            @page {
+              size: A4 portrait;
+              margin: 8mm 10mm !important;
             }
-            body {
+            html, body {
               background-color: #ffffff !important;
               padding: 0 !important;
               margin: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .no-print {
+              display: none !important;
             }
             .resume-editor-container {
               min-height: auto !important;
               background-color: #ffffff !important;
-            }
-            .ats-resume-paper {
-              box-shadow: none !important;
+              display: block !important;
               padding: 0 !important;
               margin: 0 !important;
               width: 100% !important;
+              max-width: 100% !important;
+            }
+            .ats-resume-paper {
+              box-shadow: none !important;
+              border-radius: 0 !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
             }
           }
         `}</style>
