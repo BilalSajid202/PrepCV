@@ -55,20 +55,45 @@ export default function DashboardPage() {
 
   const completeness = calculateCompleteness();
 
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return "#16A34A";
+    if (score >= 75) return "#2563EB";
+    if (score >= 50) return "#F59E0B";
+    return "#EF4444";
+  };
+
   return (
     <ProtectedRoute>
-      <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC" }}>
+      <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", fontFamily: "'Inter', sans-serif" }}>
         {/* Navigation Bar */}
         <header style={{
           backgroundColor: "#FFFFFF",
           borderBottom: "1px solid #E2E8F0",
-          padding: "16px 32px",
+          padding: "0 32px",
+          height: "64px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between"
+          justifyContent: "space-between",
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
         }}>
-          <div style={{ fontSize: "22px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: "6px" }}>
-            Prep<span style={{ color: "#2563EB" }}>CV</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }} onClick={() => router.push("/dashboard")}>
+              Prep<span style={{ color: "#2563EB" }}>CV</span>
+            </div>
+
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button style={{ padding: "6px 12px", borderRadius: "6px", border: "none", background: "#EFF6FF", fontSize: "14px", fontWeight: 600, color: "#2563EB", cursor: "pointer" }}>
+                Dashboard
+              </button>
+              <button onClick={() => router.push("/profile")} style={{ padding: "6px 12px", borderRadius: "6px", border: "none", background: "transparent", fontSize: "14px", fontWeight: 500, color: "#64748B", cursor: "pointer" }}>
+                Profile
+              </button>
+              <button onClick={() => router.push("/ats-checker")} style={{ padding: "6px 12px", borderRadius: "6px", border: "none", background: "transparent", fontSize: "14px", fontWeight: 600, color: "#7C3AED", cursor: "pointer" }}>
+                🎯 ATS Checker
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -81,9 +106,9 @@ export default function DashboardPage() {
                 backgroundColor: "#F1F5F9",
                 color: "#0F172A",
                 border: "1px solid #CBD5E1",
-                padding: "8px 16px",
+                padding: "6px 14px",
                 borderRadius: "6px",
-                fontSize: "14px",
+                fontSize: "13px",
                 fontWeight: 500,
                 cursor: "pointer"
               }}
@@ -94,14 +119,14 @@ export default function DashboardPage() {
         </header>
 
         {/* Dashboard Main Content */}
-        <main style={{ maxWidth: "1000px", margin: "40px auto", padding: "0 24px" }}>
+        <main style={{ maxWidth: "1050px", margin: "32px auto", padding: "0 24px" }}>
           
           {/* Welcome Header Banner */}
           <div style={{
             backgroundColor: "#FFFFFF",
             borderRadius: "12px",
             border: "1px solid #E2E8F0",
-            padding: "32px",
+            padding: "28px 32px",
             boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
             marginBottom: "28px",
             display: "flex",
@@ -110,99 +135,130 @@ export default function DashboardPage() {
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <div style={{
-                width: "56px",
-                height: "56px",
+                width: "52px",
+                height: "52px",
                 borderRadius: "50%",
-                backgroundColor: "#2563EB",
+                background: "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
                 color: "#FFFFFF",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "24px",
+                fontSize: "22px",
                 fontWeight: 700
               }}>
                 {user?.full_name ? user.full_name[0].toUpperCase() : "U"}
               </div>
               <div>
-                <h1 style={{ fontSize: "24px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                <h1 style={{ fontSize: "22px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
                   Welcome back, {user?.full_name}!
                 </h1>
-                <p style={{ fontSize: "14px", color: "#64748B", margin: "4px 0 0 0" }}>
-                  {profile?.personal_info?.professional_title || "Candidate Account"} ({user?.email})
+                <p style={{ fontSize: "13.5px", color: "#64748B", margin: "4px 0 0 0" }}>
+                  {profile?.personal_info?.professional_title || "Candidate Account"} • {user?.email}
                 </p>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => router.push("/ats-checker")}
+                style={{
+                  backgroundColor: "#F5F3FF",
+                  color: "#7C3AED",
+                  border: "1px solid #DDD6FE",
+                  padding: "9px 18px",
+                  borderRadius: "8px",
+                  fontSize: "13.5px",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                🎯 Open ATS Checker
+              </button>
               <button
                 onClick={() => router.push("/profile")}
                 style={{
                   backgroundColor: "#2563EB",
                   color: "#FFFFFF",
                   border: "none",
-                  padding: "10px 20px",
+                  padding: "9px 18px",
                   borderRadius: "8px",
-                  fontSize: "14px",
+                  fontSize: "13.5px",
                   fontWeight: 600,
                   cursor: "pointer"
                 }}
               >
-                Build / Edit Profile
+                Profile & Builder
               </button>
             </div>
           </div>
 
-          {/* Grid Layout: Profile Status & Quick Resume Generation */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "28px" }}>
+          {/* Grid: 3 Quick Action Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px", marginBottom: "28px" }}>
             
             {/* Card 1: Profile Completeness */}
-            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0" }}>
-                Profile Progress
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px" }}>
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 10px 0" }}>
+                Candidate Profile
               </h3>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: 600, color: "#64748B", marginBottom: "6px" }}>
-                <span>Structured Profile Data</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px", fontWeight: 600, color: "#64748B", marginBottom: "6px" }}>
+                <span>Completeness</span>
                 <span>{completeness}%</span>
               </div>
-              <div style={{ width: "100%", height: "8px", backgroundColor: "#E2E8F0", borderRadius: "4px", overflow: "hidden", marginBottom: "16px" }}>
-                <div style={{ width: `${completeness}%`, height: "100%", backgroundColor: "#2563EB", transition: "width 0.4s ease" }}></div>
+              <div style={{ width: "100%", height: "6px", backgroundColor: "#E2E8F0", borderRadius: "3px", overflow: "hidden", marginBottom: "12px" }}>
+                <div style={{ width: `${completeness}%`, height: "100%", backgroundColor: "#2563EB" }}></div>
               </div>
-              <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 16px 0", lineHeight: 1.5 }}>
-                {completeness > 50
-                  ? "Your profile has sufficient details to generate a high-scoring ATS resume."
-                  : "Complete your work experience and skills to maximize ATS optimization."}
+              <p style={{ fontSize: "12.5px", color: "#475569", margin: "0 0 14px 0", lineHeight: 1.4 }}>
+                {completeness >= 80 ? "Your profile is fully ready for tailored resume generation." : "Add experience and skills to boost ATS results."}
               </p>
               <button
                 onClick={() => router.push("/profile")}
-                style={{ backgroundColor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", padding: "8px 16px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", width: "100%" }}
+                style={{ backgroundColor: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", padding: "6px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", width: "100%" }}
               >
-                Manage Candidate Profile →
+                Manage Profile →
               </button>
             </div>
 
-            {/* Card 2: Quick Resume Action */}
-            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 8px 0" }}>
-                ✨ AI ATS Resume Generator
+            {/* Card 2: ATS Match Scoring */}
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px" }}>
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 8px 0" }}>
+                🎯 ATS Match Scoring
               </h3>
-              <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 20px 0", lineHeight: 1.5 }}>
-                Generate an ATS-safe single-column resume with action-driven bullet points in under 15 seconds.
+              <p style={{ fontSize: "12.5px", color: "#475569", margin: "0 0 16px 0", lineHeight: 1.4 }}>
+                Paste any job description to evaluate your resume against ATS screeners and get actionable gap fixes.
+              </p>
+              <button
+                onClick={() => router.push("/ats-checker")}
+                style={{ backgroundColor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE", padding: "7px 14px", borderRadius: "6px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer", width: "100%" }}
+              >
+                Launch ATS Checker →
+              </button>
+            </div>
+
+            {/* Card 3: Generate New Resume */}
+            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px" }}>
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 8px 0" }}>
+                ✨ New ATS Resume
+              </h3>
+              <p style={{ fontSize: "12.5px", color: "#475569", margin: "0 0 16px 0", lineHeight: 1.4 }}>
+                Generate an optimized single-column ATS resume with action verbs and quantifiable bullets.
               </p>
               <button
                 onClick={() => router.push("/profile")}
-                style={{ backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", padding: "10px 20px", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: "pointer", width: "100%" }}
+                style={{ backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", padding: "8px 16px", borderRadius: "6px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer", width: "100%" }}
               >
-                + Generate New Resume
+                + Generate Resume
               </button>
             </div>
 
           </div>
 
-          {/* Saved Resumes Section */}
-          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "28px" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#0F172A", margin: "0 0 16px 0" }}>
-              My Saved Resumes ({resumes.length})
-            </h2>
+          {/* Saved Resumes Section with Versioning & ATS score badges */}
+          <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px 28px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                My Saved Resumes ({resumes.length})
+              </h2>
+            </div>
 
             {loading ? (
               <div style={{ padding: "20px", color: "#64748B", fontSize: "14px" }}>Loading resumes...</div>
@@ -223,29 +279,50 @@ export default function DashboardPage() {
                 {resumes.map((resume) => (
                   <div
                     key={resume.id}
-                    onClick={() => router.push(`/resumes/${resume.id}`)}
                     style={{
                       border: "1px solid #E2E8F0",
                       borderRadius: "10px",
-                      padding: "20px",
+                      padding: "18px",
                       backgroundColor: "#FAFAFA",
-                      cursor: "pointer",
                       transition: "all 0.2s ease"
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                      <h4 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                        {resume.title}
-                      </h4>
-                      <span style={{ backgroundColor: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 700 }}>
-                        ATS Ready ✓
-                      </span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                      <div>
+                        <h4 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 2px 0" }}>
+                          {resume.title}
+                        </h4>
+                        <span style={{ fontSize: "12px", color: "#64748B" }}>
+                          Version {resume.version || 1} • {new Date(resume.updated_at).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", gap: "6px" }}>
+                        {resume.ats_score ? (
+                          <span style={{ backgroundColor: "#EFF6FF", color: getScoreColor(resume.ats_score), border: "1px solid #BFDBFE", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 700 }}>
+                            {resume.ats_score}% ATS
+                          </span>
+                        ) : (
+                          <span style={{ backgroundColor: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 700 }}>
+                            ATS Safe ✓
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p style={{ fontSize: "12px", color: "#64748B", margin: "0 0 12px 0" }}>
-                      Updated: {new Date(resume.updated_at).toLocaleDateString()}
-                    </p>
-                    <div style={{ fontSize: "13px", color: "#2563EB", fontWeight: 600 }}>
-                      Open Resume Editor →
+
+                    <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
+                      <button
+                        onClick={() => router.push(`/resumes/${resume.id}`)}
+                        style={{ flex: 1, padding: "7px 12px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
+                      >
+                        ✏️ Open Editor
+                      </button>
+                      <button
+                        onClick={() => router.push("/ats-checker")}
+                        style={{ padding: "7px 12px", backgroundColor: "#FFFFFF", color: "#7C3AED", border: "1px solid #DDD6FE", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
+                      >
+                        🎯 Check ATS
+                      </button>
                     </div>
                   </div>
                 ))}

@@ -2,45 +2,70 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>{{ personal_info.full_name }} - Resume</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ personal_info.full_name or "Resume" }} - ATS Resume</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --text: #1a1a1a;
-    --rule: #1a1a1a;
-    --accent: #0b5cab;
-    --muted: #333333;
-    --fs-base: {{ scale.fs_base or 14 }}px;
-    --fs-name: {{ scale.fs_name or 28 }}px;
-    --fs-section: {{ scale.fs_section or 14 }}px;
-    --line-height: {{ scale.line_height or 1.45 }};
-    --section-gap: {{ scale.section_gap or 14 }}px;
-    --item-gap: {{ scale.item_gap or 10 }}px;
+    --text-main: #0f172a;
+    --text-muted: #334155;
+    --text-light: #64748b;
+    --rule-color: #0f172a;
+    --accent-color: #0284c7;
+
+    --fs-base: {{ scale.fs_base or "10pt" }};
+    --fs-name: {{ scale.fs_name or "21pt" }};
+    --fs-title: {{ scale.fs_title or "10.5pt" }};
+    --fs-section: {{ scale.fs_section or "11pt" }};
+    --fs-sub: {{ scale.fs_sub or "9.5pt" }};
+    
+    --line-height: {{ scale.line_height or 1.4 }};
+    --section-gap: {{ scale.section_gap or "14px" }};
+    --item-gap: {{ scale.item_gap or "10px" }};
+    --para-gap: {{ scale.para_gap or "4px" }};
+    --page-padding: 24px 28px;
   }
 
-  * { box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 
   @page {
     size: A4 portrait;
     margin: 8mm 10mm;
   }
 
-  html, body {
-    width: 100%;
-    margin: 0;
-    padding: 0;
+  html {
+    background-color: #f8fafc;
   }
 
   body {
-    font-family: "Georgia", "Times New Roman", Times, serif;
-    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text-main);
     background: #ffffff;
     width: 100%;
-    max-width: 100%;
-    margin: 0;
-    padding: 20px 24px 30px;
+    max-width: 850px;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: var(--page-padding);
     line-height: var(--line-height);
     font-size: var(--fs-base);
-    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .resume-content-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
   }
 
   @media print {
@@ -48,70 +73,107 @@
       size: A4 portrait;
       margin: 8mm 10mm;
     }
-    body {
+    html, body {
+      background: #ffffff !important;
       padding: 0 !important;
       margin: 0 !important;
       width: 100% !important;
       max-width: 100% !important;
+      min-height: auto !important;
+      box-shadow: none !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .contact a {
+      color: var(--text-main) !important;
+      text-decoration: none !important;
     }
   }
 
+  /* ================= HEADER ================= */
   header {
     text-align: center;
     margin-bottom: var(--section-gap);
+    padding-bottom: 2px;
   }
 
   h1.name {
     font-size: var(--fs-name);
-    font-weight: bold;
-    margin: 0 0 4px;
-    letter-spacing: 0.5px;
-    color: var(--text);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+    line-height: 1.15;
+    margin-bottom: 4px;
+    text-transform: capitalize;
   }
 
   .title {
-    font-size: calc(var(--fs-base) + 1px);
-    margin: 0 0 6px;
-    color: var(--muted);
+    font-size: var(--fs-title);
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
   }
 
   .contact {
-    font-size: calc(var(--fs-base) - 0.5px);
-    margin: 0;
-    line-height: 1.5;
+    font-size: var(--fs-sub);
+    color: var(--text-light);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    line-height: 1.4;
   }
 
   .contact a {
-    color: var(--accent);
+    color: var(--accent-color);
     text-decoration: none;
+    font-weight: 500;
+    transition: color 0.15s ease;
   }
-  .contact a:hover { text-decoration: underline; }
+
+  .contact a:hover {
+    text-decoration: underline;
+    color: #0369a1;
+  }
 
   .sep {
-    margin: 0 6px;
-    color: var(--muted);
+    color: #cbd5e1;
+    font-size: 0.8em;
+    user-select: none;
   }
 
+  /* ================= SECTIONS ================= */
   section {
     margin-top: var(--section-gap);
   }
 
+  section:first-of-type {
+    margin-top: calc(var(--section-gap) * 0.7);
+  }
+
   h2.section-title {
     font-size: var(--fs-section);
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    background: #efefef;
-    border-bottom: 1.5px solid var(--rule);
-    padding: 2px 6px;
-    margin: 0 0 8px;
-    font-weight: bold;
+    letter-spacing: 0.06em;
+    color: var(--text-main);
+    border-bottom: 1.5px solid var(--rule-color);
+    padding-bottom: 3px;
+    margin-bottom: calc(var(--item-gap) * 0.75);
   }
 
+  /* ================= SUMMARY ================= */
   .summary {
-    margin: 0;
+    font-size: var(--fs-base);
+    color: var(--text-muted);
+    line-height: var(--line-height);
     text-align: justify;
+    margin: 0;
   }
 
+  /* ================= EXPERIENCE & PROJECTS ================= */
   .entry {
     margin-bottom: var(--item-gap);
   }
@@ -124,43 +186,63 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .entry-title {
-    font-weight: bold;
+    font-weight: 700;
     font-size: var(--fs-base);
+    color: var(--text-main);
   }
 
   .entry-date {
-    font-style: italic;
+    font-size: var(--fs-sub);
+    font-weight: 500;
+    color: var(--text-light);
     white-space: nowrap;
-    font-size: calc(var(--fs-base) - 1px);
-    color: var(--muted);
+    text-align: right;
   }
 
   .entry-sub {
     display: flex;
     justify-content: space-between;
-    font-size: calc(var(--fs-base) - 1px);
-    font-style: italic;
-    color: var(--muted);
+    align-items: baseline;
+    font-size: var(--fs-sub);
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-top: 1px;
     margin-bottom: 3px;
+  }
+
+  .entry-sub .company {
+    font-style: normal;
+    color: var(--text-muted);
+  }
+
+  .entry-sub .location {
+    font-style: italic;
+    color: var(--text-light);
   }
 
   ul.bullets {
-    margin: 4px 0 0;
-    padding-left: 20px;
+    margin: 3px 0 0;
+    padding-left: 1.25rem;
+    list-style-type: disc;
   }
 
   ul.bullets li {
+    font-size: var(--fs-base);
+    color: var(--text-muted);
+    line-height: var(--line-height);
     margin-bottom: 3px;
+    text-align: justify;
   }
 
   ul.bullets li:last-child {
     margin-bottom: 0;
   }
 
+  /* ================= PROJECTS ================= */
   .project {
     margin-bottom: var(--item-gap);
   }
@@ -169,65 +251,129 @@
     margin-bottom: 0;
   }
 
-  .project-title {
-    font-weight: bold;
-    font-size: var(--fs-base);
-    display: block;
+  .project-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
     margin-bottom: 2px;
   }
 
+  .project-title {
+    font-weight: 700;
+    font-size: var(--fs-base);
+    color: var(--text-main);
+  }
+
+  .project-links {
+    font-size: var(--fs-sub);
+    color: var(--accent-color);
+  }
+
+  .project-links a {
+    color: var(--accent-color);
+    text-decoration: none;
+  }
+
+  .project-links a:hover {
+    text-decoration: underline;
+  }
+
   .project p {
-    margin: 0;
+    font-size: var(--fs-base);
+    color: var(--text-muted);
+    line-height: var(--line-height);
+    margin: 0 0 3px 0;
     text-align: justify;
   }
 
+  /* ================= SKILLS ================= */
   .skills-row {
-    margin-bottom: 6px;
-    line-height: 1.5;
+    font-size: var(--fs-base);
+    color: var(--text-muted);
+    line-height: calc(var(--line-height) * 1.05);
   }
 
   .skills-row .cat {
-    font-weight: bold;
+    font-weight: 700;
+    color: var(--text-main);
+  }
+
+  /* ================= EDUCATION & CERTS ================= */
+  .edu-entry {
+    margin-bottom: calc(var(--item-gap) * 0.7);
+  }
+
+  .edu-entry:last-child {
+    margin-bottom: 0;
   }
 
   .edu-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 6px;
+    gap: 8px;
   }
 
-  .edu-header:last-child {
-    margin-bottom: 0;
+  .edu-left {
+    font-size: var(--fs-base);
+    color: var(--text-muted);
   }
 
-  .edu-left { font-size: var(--fs-base); }
-  .edu-right { text-align: right; font-size: calc(var(--fs-base) - 1px); font-style: italic; color: var(--muted); }
+  .edu-left strong {
+    font-weight: 700;
+    color: var(--text-main);
+  }
 
-  strong { font-weight: bold; }
+  .edu-right {
+    text-align: right;
+    font-size: var(--fs-sub);
+    font-weight: 500;
+    color: var(--text-light);
+    white-space: nowrap;
+  }
+
+  strong {
+    font-weight: 700;
+    color: var(--text-main);
+  }
 </style>
 </head>
 <body>
+
+<div class="resume-content-wrapper" id="resume-container">
 
   <!-- ================= HEADER ================= -->
   <header>
     <h1 class="name">{{ personal_info.full_name or "Candidate Name" }}</h1>
     {% if personal_info.professional_title %}
-    <p class="title">{{ personal_info.professional_title }}</p>
+    <div class="title">{{ personal_info.professional_title }}</div>
     {% endif %}
-    <p class="contact">
-      {% if personal_info.phone %}<a href="tel:{{ personal_info.phone }}">{{ personal_info.phone }}</a>{% endif %}
-      {% if personal_info.phone and personal_info.email %}<span class="sep">&#9671;</span>{% endif %}
-      {% if personal_info.email %}<a href="mailto:{{ personal_info.email }}">{{ personal_info.email }}</a>{% endif %}
-      {% if personal_info.email and personal_info.location %}<span class="sep">&#9671;</span>{% endif %}
-      {% if personal_info.location %}{{ personal_info.location }}{% endif %}
-      {% if personal_info.location and personal_info.linkedin_url %}<span class="sep">&#9671;</span>{% endif %}
-      {% if personal_info.linkedin_url %}<a href="{% if personal_info.linkedin_url.startswith('http') %}{{ personal_info.linkedin_url }}{% else %}https://{{ personal_info.linkedin_url }}{% endif %}" target="_blank">LinkedIn</a>{% endif %}
-      {% if personal_info.linkedin_url and personal_info.github_url %}<span class="sep">&#9671;</span>{% endif %}
-      {% if personal_info.github_url %}<a href="{% if personal_info.github_url.startswith('http') %}{{ personal_info.github_url }}{% else %}https://{{ personal_info.github_url }}{% endif %}" target="_blank">GitHub</a>{% endif %}
-      {% if personal_info.github_url and personal_info.portfolio_url %}<span class="sep">&#9671;</span>{% endif %}
-      {% if personal_info.portfolio_url %}<a href="{% if personal_info.portfolio_url.startswith('http') %}{{ personal_info.portfolio_url }}{% else %}https://{{ personal_info.portfolio_url }}{% endif %}" target="_blank">Portfolio</a>{% endif %}
-    </p>
+    <div class="contact">
+      {% if personal_info.phone %}
+        <span><a href="tel:{{ personal_info.phone }}">{{ personal_info.phone }}</a></span>
+      {% endif %}
+      {% if personal_info.phone and personal_info.email %}<span class="sep">•</span>{% endif %}
+      {% if personal_info.email %}
+        <span><a href="mailto:{{ personal_info.email }}">{{ personal_info.email }}</a></span>
+      {% endif %}
+      {% if personal_info.email and personal_info.location %}<span class="sep">•</span>{% endif %}
+      {% if personal_info.location %}
+        <span>{{ personal_info.location }}</span>
+      {% endif %}
+      {% if personal_info.location and personal_info.linkedin_url %}<span class="sep">•</span>{% endif %}
+      {% if personal_info.linkedin_url %}
+        <span><a href="{% if personal_info.linkedin_url.startswith('http') %}{{ personal_info.linkedin_url }}{% else %}https://{{ personal_info.linkedin_url }}{% endif %}" target="_blank">{{ personal_info.linkedin_url | format_display_url }}</a></span>
+      {% endif %}
+      {% if personal_info.linkedin_url and personal_info.github_url %}<span class="sep">•</span>{% endif %}
+      {% if personal_info.github_url %}
+        <span><a href="{% if personal_info.github_url.startswith('http') %}{{ personal_info.github_url }}{% else %}https://{{ personal_info.github_url }}{% endif %}" target="_blank">{{ personal_info.github_url | format_display_url }}</a></span>
+      {% endif %}
+      {% if personal_info.github_url and personal_info.portfolio_url %}<span class="sep">•</span>{% endif %}
+      {% if personal_info.portfolio_url %}
+        <span><a href="{% if personal_info.portfolio_url.startswith('http') %}{{ personal_info.portfolio_url }}{% else %}https://{{ personal_info.portfolio_url }}{% endif %}" target="_blank">{{ personal_info.portfolio_url | format_display_url }}</a></span>
+      {% endif %}
+    </div>
   </header>
 
   <!-- ================= SUMMARY ================= -->
@@ -249,8 +395,8 @@
         <span class="entry-date">{{ exp.start_date }} &mdash; {% if exp.is_current %}Present{% else %}{{ exp.end_date }}{% endif %}</span>
       </div>
       <div class="entry-sub">
-        <span>{{ exp.company }}</span>
-        {% if exp.location %}<span>{{ exp.location }}</span>{% endif %}
+        <span class="company">{{ exp.company }}</span>
+        {% if exp.location %}<span class="location">{{ exp.location }}</span>{% endif %}
       </div>
       {% if exp.achievements and exp.achievements|length > 0 %}
       <ul class="bullets">
@@ -270,12 +416,21 @@
     <h2 class="section-title">Projects</h2>
     {% for proj in projects %}
     <div class="project">
-      <span class="project-title">{{ proj.name }}</span>
+      <div class="project-header">
+        <span class="project-title">{{ proj.name }}</span>
+        {% if proj.project_url or proj.github_url %}
+        <span class="project-links">
+          {% if proj.project_url %}<a href="{{ proj.project_url }}" target="_blank">Live Demo</a>{% endif %}
+          {% if proj.project_url and proj.github_url %} | {% endif %}
+          {% if proj.github_url %}<a href="{{ proj.github_url }}" target="_blank">Code</a>{% endif %}
+        </span>
+        {% endif %}
+      </div>
       {% if proj.description %}<p>{{ proj.description }}</p>{% endif %}
       {% if proj.achievements %}
         {% for item in proj.achievements %}
           {% if item and item|trim != "" and item|trim != "•" and item|trim != "-" %}
-            {% if loop.first %}<ul class="bullets" style="margin-top: 4px;">{% endif %}
+            {% if loop.first %}<ul class="bullets">{% endif %}
               <li>{{ item|trim }}</li>
             {% if loop.last %}</ul>{% endif %}
           {% endif %}
@@ -291,7 +446,7 @@
   <section>
     <h2 class="section-title">Skills</h2>
     <div class="skills-row">
-      <span class="cat">Technical Proficiencies &mdash;</span> {{ skills|join(', ') }}
+      <span class="cat">Technical Proficiencies:</span> {{ skills|join(', ') }}
     </div>
   </section>
   {% endif %}
@@ -301,9 +456,13 @@
   <section>
     <h2 class="section-title">Education</h2>
     {% for edu in education %}
-    <div class="edu-header">
-      <span class="edu-left"><strong>{{ edu.degree }}</strong>{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}{% if edu.institution %}, {{ edu.institution }}{% endif %}</span>
-      <span class="edu-right">{{ edu.start_date }} &mdash; {% if edu.is_current %}Present{% else %}{{ edu.end_date }}{% endif %}{% if edu.location %}<br>{{ edu.location }}{% endif %}</span>
+    <div class="edu-entry">
+      <div class="edu-header">
+        <div class="edu-left">
+          <strong>{{ edu.degree }}</strong>{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}{% if edu.institution %}, {{ edu.institution }}{% endif %}
+        </div>
+        <div class="edu-right">{{ edu.start_date }} &mdash; {% if edu.is_current %}Present{% else %}{{ edu.end_date }}{% endif %}</div>
+      </div>
     </div>
     {% endfor %}
   </section>
@@ -314,13 +473,65 @@
   <section>
     <h2 class="section-title">Certifications</h2>
     {% for cert in certifications %}
-    <div class="edu-header">
-      <span class="edu-left"><strong>{{ cert.name }}</strong>{% if cert.issuing_organization %} &mdash; {{ cert.issuing_organization }}{% endif %}</span>
-      <span class="edu-right">{{ cert.issue_date }}{% if cert.expiration_date %} &mdash; {{ cert.expiration_date }}{% endif %}</span>
+    <div class="edu-entry">
+      <div class="edu-header">
+        <div class="edu-left">
+          <strong>{{ cert.name }}</strong>{% if cert.issuing_organization %} &mdash; {{ cert.issuing_organization }}{% endif %}
+        </div>
+        <div class="edu-right">{{ cert.issue_date }}{% if cert.expiration_date %} &mdash; {{ cert.expiration_date }}{% endif %}</div>
+      </div>
     </div>
     {% endfor %}
   </section>
   {% endif %}
 
+</div>
+
+<!-- Intelligent Auto-Fitting Script -->
+<script>
+(function() {
+  function smartAutoFit() {
+    const body = document.body;
+    const container = document.getElementById('resume-container');
+    if (!container) return;
+
+    // Target single A4 height in pixels at 96 DPI (~1122px) minus padding
+    const A4_HEIGHT_PX = 1080;
+    const currentHeight = container.scrollHeight;
+
+    // If height is noticeably smaller than 1 full page (e.g. < 880px),
+    // proportionally expand spacing and line height to fill the page cleanly.
+    if (currentHeight > 300 && currentHeight < 880) {
+      const fillRatio = currentHeight / A4_HEIGHT_PX;
+      if (fillRatio < 0.65) {
+        // Very concise resume -> expand gaps generously
+        document.documentElement.style.setProperty('--section-gap', '22px');
+        document.documentElement.style.setProperty('--item-gap', '14px');
+        document.documentElement.style.setProperty('--line-height', '1.52');
+        document.documentElement.style.setProperty('--fs-base', '10.5pt');
+      } else if (fillRatio < 0.82) {
+        // Moderately concise resume -> pleasant breathable spacing
+        document.documentElement.style.setProperty('--section-gap', '18px');
+        document.documentElement.style.setProperty('--item-gap', '12px');
+        document.documentElement.style.setProperty('--line-height', '1.45');
+        document.documentElement.style.setProperty('--fs-base', '10.2pt');
+      }
+    } else if (currentHeight > A4_HEIGHT_PX && currentHeight < 1220) {
+      // Slight overflow -> micro-tighten to fit 1 clean page perfectly
+      document.documentElement.style.setProperty('--section-gap', '10px');
+      document.documentElement.style.setProperty('--item-gap', '7px');
+      document.documentElement.style.setProperty('--line-height', '1.32');
+      document.documentElement.style.setProperty('--fs-base', '9.5pt');
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', smartAutoFit);
+  } else {
+    smartAutoFit();
+  }
+  window.addEventListener('resize', smartAutoFit);
+})();
+</script>
 </body>
 </html>

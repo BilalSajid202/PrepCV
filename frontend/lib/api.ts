@@ -95,10 +95,107 @@ export interface ResumeData {
   id: string;
   user_id: string;
   title: string;
+  version?: number;
+  ats_score?: number | null;
+  target_jd?: string | null;
   profile_snapshot: CandidateProfile;
   content: ResumeContent;
   created_at: string;
   updated_at: string;
+}
+
+export interface MissingKeyword {
+  skill: string;
+  count_in_jd: number;
+  section: string;
+}
+
+export interface ATSRecommendation {
+  id: string;
+  title: string;
+  description: string;
+  action_type: string;
+  target_text?: string;
+  category?: string;
+}
+
+export interface ScoreBreakdown {
+  keyword_match: number;
+  skills_match: number;
+  experience_match: number;
+  education_match: number;
+}
+
+export interface KeywordStats {
+  matched_keywords_count: number;
+  total_jd_keywords_count: number;
+}
+
+export interface ATSScoreResult {
+  overall_score: number;
+  previous_score?: number | null;
+  score_change?: number | null;
+  score_tier: string;
+  score_summary: string;
+  keyword_stats: KeywordStats;
+  breakdown: ScoreBreakdown;
+  missing_keywords: MissingKeyword[];
+  matching_skills: string[];
+  recommendations: ATSRecommendation[];
+}
+
+export interface ResumeVersion {
+  id: string;
+  resume_id: string;
+  version_number: number;
+  title: string;
+  change_summary: string;
+  ats_score?: number | null;
+  created_at: string;
+}
+
+export interface ResumeVersionDetail extends ResumeVersion {
+  content: ResumeContent;
+  target_jd?: string | null;
+}
+
+export interface VersionCompareResult {
+  resume_id: string;
+  base_version: {
+    version_number: number;
+    title: string;
+    ats_score?: number | null;
+    created_at: string;
+  };
+  compared_version: {
+    version_number: number;
+    title: string;
+    ats_score?: number | null;
+    created_at: string;
+  };
+  diff: {
+    skills: {
+      added: string[];
+      removed: string[];
+      unchanged: string[];
+    };
+    summary: {
+      changed: boolean;
+      base_text: string;
+      compared_text: string;
+    };
+    experience: {
+      base_roles_count: number;
+      compared_roles_count: number;
+      base_bullets_count: number;
+      compared_bullets_count: number;
+    };
+    ats_score: {
+      base_score?: number | null;
+      compared_score?: number | null;
+      score_diff?: number | null;
+    };
+  };
 }
 
 export async function apiRequest<T>(
@@ -247,4 +344,79 @@ export async function downloadResumeDocx(id: string, filename: string = "Resume.
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(downloadUrl);
+}
+
+export async function scoreResumeAts(
+  resumeId: string,
+  jobDescription: string,
+  content?: ResumeContent
+): Promise<ATSScoreResult> {
+  return apiRequest<ATSScoreResult>(`/api/resumes/${resumeId}/ats-score`, {
+    method: "POST",
+    body: JSON.stringify({
+      job_description: jobDescription,
+      content: content || null,
+    }),
+  });
+}
+
+export async function scoreDirectContentAts(
+  jobDescription: string,
+  content: ResumeContent
+): Promise<ATSScoreResult> {
+  return apiRequest<ATSScoreResult>("/api/resumes/ats-score-direct", {
+    method: "POST",
+    body: JSON.stringify({
+      job_description: jobDescription,
+      content,
+    }),
+  });
+}
+
+export async function fetchResumeVersions(resumeId: string): Promise<ResumeVersion[]> {
+  return apiRequest<ResumeVersion[]>(`/api/resumes/${resumeId}/versions`);
+}
+
+export async function fetchResumeVersionDetail(
+  resumeId: string,
+  versionId: string
+): Promise<ResumeVersionDetail> {
+  return apiRequest<ResumeVersionDetail>(`/api/resumes/${resumeId}/versions/${versionId}`);
+}
+
+export async function createResumeVersion(
+  resumeId: string,
+  content: ResumeContent,
+  title?: string,
+  changeSummary?: string,
+  atsScore?: number
+): Promise<ResumeVersion> {
+  return apiRequest<ResumeVersion>(`/api/resumes/${resumeId}/versions`, {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      content,
+      change_summary: changeSummary || "Manual version save",
+      ats_score: atsScore,
+    }),
+  });
+}
+
+export async function restoreResumeVersion(
+  resumeId: string,
+  versionId: string
+): Promise<ResumeData> {
+  return apiRequest<ResumeData>(`/api/resumes/${resumeId}/versions/${versionId}/restore`, {
+    method: "POST",
+  });
+}
+
+export async function compareResumeVersions(
+  resumeId: string,
+  baseVersionId: string,
+  comparedVersionId: string
+): Promise<VersionCompareResult> {
+  return apiRequest<VersionCompareResult>(
+    `/api/resumes/${resumeId}/compare?base_version_id=${encodeURIComponent(baseVersionId)}&compared_version_id=${encodeURIComponent(comparedVersionId)}`
+  );
 }

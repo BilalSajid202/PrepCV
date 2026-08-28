@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -7,7 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database.models import Resume, User
+from app.database.models import Resume, ResumeVersion, User
 from app.schemas.resume import ResumeContentSchema
 
 logger = logging.getLogger(__name__)
@@ -16,18 +17,68 @@ TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 TEMPLATE_NAME = "resume_template.html"
 
 
+def format_display_url(url: Optional[str]) -> str:
+    """Format a web/social URL for clean presentation on resumes (e.g. linkedin.com/in/john)."""
+    if not url:
+        return ""
+    u = str(url).strip()
+    u = re.sub(r"^https?://", "", u, flags=re.IGNORECASE)
+    u = re.sub(r"^www\.", "", u, flags=re.IGNORECASE)
+    return u.rstrip("/")
+
+
 # ---------------------------------------------------------------------------
 # Dynamic spacing engine
 # ---------------------------------------------------------------------------
 SCALE_TIERS = {
-    "spacious": dict(fs_base=11.5, fs_name=26, fs_section=12.5, line_height=1.5,
-                      section_gap=22, item_gap=14, para_gap=6, page_margin=20),
-    "normal":   dict(fs_base=10.5, fs_name=23, fs_section=11.5, line_height=1.35,
-                      section_gap=16, item_gap=10, para_gap=4, page_margin=16),
-    "compact":  dict(fs_base=9.5, fs_name=20, fs_section=10.5, line_height=1.22,
-                      section_gap=11, item_gap=7, para_gap=3, page_margin=12),
-    "dense":    dict(fs_base=8.8, fs_name=18, fs_section=10, line_height=1.15,
-                      section_gap=8, item_gap=5, para_gap=2, page_margin=10),
+    "spacious": dict(
+        fs_base="10.5pt",
+        fs_name="22pt",
+        fs_title="11pt",
+        fs_section="11.5pt",
+        fs_sub="9.5pt",
+        line_height=1.46,
+        section_gap="18px",
+        item_gap="12px",
+        para_gap="5px",
+        page_margin="10mm 12mm",
+    ),
+    "normal": dict(
+        fs_base="10pt",
+        fs_name="20pt",
+        fs_title="10.5pt",
+        fs_section="11pt",
+        fs_sub="9pt",
+        line_height=1.38,
+        section_gap="14px",
+        item_gap="9px",
+        para_gap="4px",
+        page_margin="8mm 10mm",
+    ),
+    "compact": dict(
+        fs_base="9.5pt",
+        fs_name="18pt",
+        fs_title="10pt",
+        fs_section="10.5pt",
+        fs_sub="8.5pt",
+        line_height=1.28,
+        section_gap="10px",
+        item_gap="7px",
+        para_gap="3px",
+        page_margin="7mm 9mm",
+    ),
+    "dense": dict(
+        fs_base="9pt",
+        fs_name="17pt",
+        fs_title="9.5pt",
+        fs_section="10pt",
+        fs_sub="8pt",
+        line_height=1.20,
+        section_gap="8px",
+        item_gap="5px",
+        para_gap="2px",
+        page_margin="6mm 8mm",
+    ),
 }
 
 
@@ -42,37 +93,37 @@ def estimate_content_score(data: dict) -> int:
     score += _text_len(pi.get("summary"))
 
     for exp in data.get("experience") or []:
-        score += 60  # fixed cost per role (title/company/dates lines)
+        score += 50  # fixed cost per role (title/company/dates lines)
         score += _text_len(exp.get("description"))
         for a in exp.get("achievements") or []:
-            score += _text_len(a) + 10
+            score += _text_len(a) + 8
 
     for edu in data.get("education") or []:
-        score += 45
+        score += 40
         score += _text_len(edu.get("description"))
 
-    score += len(data.get("skills") or []) * 9
+    score += len(data.get("skills") or []) * 8
 
     for proj in data.get("projects") or []:
-        score += 45
+        score += 40
         score += _text_len(proj.get("description"))
         for a in proj.get("achievements") or []:
-            score += _text_len(a) + 10
-        score += len(proj.get("technologies") or []) * 6
+            score += _text_len(a) + 8
+        score += len(proj.get("technologies") or []) * 5
 
     for cert in data.get("certifications") or []:
-        score += 30
+        score += 25
 
     return score
 
 
 def pick_scale(data: dict) -> dict:
     score = estimate_content_score(data)
-    if score < 500:
+    if score < 1200:
         tier = "spacious"
-    elif score < 1100:
+    elif score < 2200:
         tier = "normal"
-    elif score < 1900:
+    elif score < 3200:
         tier = "compact"
     else:
         tier = "dense"
@@ -102,6 +153,7 @@ def render_resume_html(data: dict) -> str:
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    env.filters["format_display_url"] = format_display_url
     template = env.get_template(TEMPLATE_NAME)
 
     return template.render(
@@ -146,7 +198,7 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
 
     personal_info = data.get("personal_info") or {}
 
-    def format_run(run, font_name="Georgia", size_pt=10, bold=False, italic=False, color_rgb=(26, 26, 26)):
+    def format_run(run, font_name="Calibri", size_pt=10, bold=False, italic=False, color_rgb=(15, 23, 42)):
         run.font.name = font_name
         run.font.size = Pt(size_pt)
         run.bold = bold
@@ -159,7 +211,7 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
     name_p.paragraph_format.space_before = Pt(0)
     name_p.paragraph_format.space_after = Pt(2)
     r = name_p.add_run(personal_info.get("full_name") or "Candidate Name")
-    format_run(r, font_name="Georgia", size_pt=20, bold=True, color_rgb=(26, 26, 26))
+    format_run(r, font_name="Calibri", size_pt=20, bold=True, color_rgb=(15, 23, 42))
 
     if personal_info.get("professional_title"):
         title_p = doc.add_paragraph()
@@ -167,34 +219,34 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
         title_p.paragraph_format.space_before = Pt(0)
         title_p.paragraph_format.space_after = Pt(4)
         r = title_p.add_run(personal_info["professional_title"])
-        format_run(r, font_name="Georgia", size_pt=11, color_rgb=(60, 60, 60))
+        format_run(r, font_name="Calibri", size_pt=11, color_rgb=(51, 65, 85))
 
     contact_parts = []
     if personal_info.get("phone"): contact_parts.append(personal_info["phone"])
     if personal_info.get("email"): contact_parts.append(personal_info["email"])
     if personal_info.get("location"): contact_parts.append(personal_info["location"])
-    if personal_info.get("linkedin_url"): contact_parts.append("LinkedIn")
-    if personal_info.get("github_url"): contact_parts.append("GitHub")
-    if personal_info.get("portfolio_url"): contact_parts.append("Portfolio")
+    if personal_info.get("linkedin_url"): contact_parts.append(format_display_url(personal_info["linkedin_url"]))
+    if personal_info.get("github_url"): contact_parts.append(format_display_url(personal_info["github_url"]))
+    if personal_info.get("portfolio_url"): contact_parts.append(format_display_url(personal_info["portfolio_url"]))
 
     if contact_parts:
         contact_p = doc.add_paragraph()
         contact_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         contact_p.paragraph_format.space_before = Pt(0)
         contact_p.paragraph_format.space_after = Pt(8)
-        contact_str = "  ◇  ".join(contact_parts)
+        contact_str = "  •  ".join(contact_parts)
         r = contact_p.add_run(contact_str)
-        format_run(r, font_name="Georgia", size_pt=9.5, color_rgb=(60, 60, 60))
+        format_run(r, font_name="Calibri", size_pt=9.5, color_rgb=(100, 116, 139))
 
     def add_section_heading(title: str):
         sec_p = doc.add_paragraph()
         sec_p.paragraph_format.space_before = Pt(10)
         sec_p.paragraph_format.space_after = Pt(4)
         r = sec_p.add_run(title.upper())
-        format_run(r, font_name="Georgia", size_pt=10.5, bold=True, color_rgb=(26, 26, 26))
+        format_run(r, font_name="Calibri", size_pt=10.5, bold=True, color_rgb=(15, 23, 42))
         try:
             pPr = sec_p._p.get_or_add_pPr()
-            pBdr = parse_xml(r'<w:pBdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:bottom w:val="single" w:sz="8" w:space="2" w:color="1A1A1A"/></w:pBdr>')
+            pBdr = parse_xml(r'<w:pBdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:bottom w:val="single" w:sz="8" w:space="2" w:color="0F172A"/></w:pBdr>')
             pPr.append(pBdr)
         except Exception:
             pass
@@ -206,7 +258,7 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
         sum_p.paragraph_format.space_before = Pt(2)
         sum_p.paragraph_format.space_after = Pt(6)
         r = sum_p.add_run(personal_info["summary"])
-        format_run(r, font_name="Georgia", size_pt=10, color_rgb=(26, 26, 26))
+        format_run(r, font_name="Calibri", size_pt=10, color_rgb=(51, 65, 85))
 
     # 3. Experience
     experience = data.get("experience") or []
@@ -217,11 +269,11 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
             head_p.paragraph_format.space_before = Pt(4)
             head_p.paragraph_format.space_after = Pt(1)
             r_pos = head_p.add_run(exp.get("position") or "")
-            format_run(r_pos, font_name="Georgia", size_pt=10.5, bold=True)
+            format_run(r_pos, font_name="Calibri", size_pt=10.5, bold=True, color_rgb=(15, 23, 42))
 
             dates_str = f" ({exp.get('start_date', '')} — {'Present' if exp.get('is_current') else exp.get('end_date', '')})"
             r_date = head_p.add_run(dates_str)
-            format_run(r_date, font_name="Georgia", size_pt=9.5, italic=True, color_rgb=(80, 80, 80))
+            format_run(r_date, font_name="Calibri", size_pt=9.5, italic=True, color_rgb=(100, 116, 139))
 
             if exp.get("company") or exp.get("location"):
                 sub_p = doc.add_paragraph()
@@ -229,7 +281,7 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
                 sub_p.paragraph_format.space_after = Pt(2)
                 sub_text = exp.get("company", "") + (f", {exp['location']}" if exp.get("location") else "")
                 r_sub = sub_p.add_run(sub_text)
-                format_run(r_sub, font_name="Georgia", size_pt=9.5, italic=True, color_rgb=(60, 60, 60))
+                format_run(r_sub, font_name="Calibri", size_pt=9.5, italic=True, color_rgb=(51, 65, 85))
 
             for bullet in exp.get("achievements") or []:
                 if bullet and bullet.strip() and bullet.strip() not in ("•", "-"):
@@ -237,7 +289,7 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
                     b_p.paragraph_format.space_before = Pt(1)
                     b_p.paragraph_format.space_after = Pt(2)
                     r_b = b_p.add_run(bullet.strip())
-                    format_run(r_b, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+                    format_run(r_b, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
 
     # 4. Projects
     projects = data.get("projects") or []
@@ -248,14 +300,14 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
             p_p.paragraph_format.space_before = Pt(4)
             p_p.paragraph_format.space_after = Pt(2)
             r_pn = p_p.add_run(proj.get("name", ""))
-            format_run(r_pn, font_name="Georgia", size_pt=10.5, bold=True)
+            format_run(r_pn, font_name="Calibri", size_pt=10.5, bold=True, color_rgb=(15, 23, 42))
 
             if proj.get("description"):
                 desc_p = doc.add_paragraph()
                 desc_p.paragraph_format.space_before = Pt(0)
                 desc_p.paragraph_format.space_after = Pt(4)
                 r_pd = desc_p.add_run(proj["description"])
-                format_run(r_pd, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+                format_run(r_pd, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
 
             for bullet in proj.get("achievements") or []:
                 if bullet and bullet.strip() and bullet.strip() not in ("•", "-"):
@@ -263,7 +315,7 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
                     b_p.paragraph_format.space_before = Pt(1)
                     b_p.paragraph_format.space_after = Pt(2)
                     r_b = b_p.add_run(bullet.strip())
-                    format_run(r_b, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+                    format_run(r_b, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
 
     # 5. Skills
     skills = data.get("skills") or []
@@ -272,10 +324,10 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
         sk_p = doc.add_paragraph()
         sk_p.paragraph_format.space_before = Pt(2)
         sk_p.paragraph_format.space_after = Pt(6)
-        r_pre = sk_p.add_run("Technical Proficiencies — ")
-        format_run(r_pre, font_name="Georgia", size_pt=9.5, bold=True)
+        r_pre = sk_p.add_run("Technical Proficiencies: ")
+        format_run(r_pre, font_name="Calibri", size_pt=9.5, bold=True, color_rgb=(15, 23, 42))
         r_sk = sk_p.add_run(", ".join(skills))
-        format_run(r_sk, font_name="Georgia", size_pt=9.5, color_rgb=(26, 26, 26))
+        format_run(r_sk, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
 
     # 6. Education
     education = data.get("education") or []
@@ -287,11 +339,11 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
             edu_p.paragraph_format.space_after = Pt(3)
             edu_title = edu.get("degree", "") + (f" in {edu['field_of_study']}" if edu.get("field_of_study") else "") + (f", {edu['institution']}" if edu.get("institution") else "")
             r_ed = edu_p.add_run(edu_title)
-            format_run(r_ed, font_name="Georgia", size_pt=10, bold=True)
+            format_run(r_ed, font_name="Calibri", size_pt=10, bold=True, color_rgb=(15, 23, 42))
 
             dates_str = f" ({edu.get('start_date', '')} — {'Present' if edu.get('is_current') else edu.get('end_date', '')})"
             r_dt = edu_p.add_run(dates_str)
-            format_run(r_dt, font_name="Georgia", size_pt=9.5, italic=True, color_rgb=(80, 80, 80))
+            format_run(r_dt, font_name="Calibri", size_pt=9.5, italic=True, color_rgb=(100, 116, 139))
 
     # 7. Certifications
     certifications = data.get("certifications") or []
@@ -302,13 +354,13 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
             cert_p.paragraph_format.space_before = Pt(2)
             cert_p.paragraph_format.space_after = Pt(2)
             r_c = cert_p.add_run(cert.get("name", ""))
-            format_run(r_c, font_name="Georgia", size_pt=9.5, bold=True)
+            format_run(r_c, font_name="Calibri", size_pt=9.5, bold=True, color_rgb=(15, 23, 42))
             if cert.get("issuing_organization"):
                 r_o = cert_p.add_run(f" — {cert['issuing_organization']}")
-                format_run(r_o, font_name="Georgia", size_pt=9.5)
+                format_run(r_o, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
             if cert.get("issue_date"):
                 r_cd = cert_p.add_run(f" ({cert['issue_date']})")
-                format_run(r_cd, font_name="Georgia", size_pt=9, italic=True, color_rgb=(80, 80, 80))
+                format_run(r_cd, font_name="Calibri", size_pt=9, italic=True, color_rgb=(100, 116, 139))
 
     stream = io.BytesIO()
     doc.save(stream)
@@ -418,14 +470,27 @@ async def improve_bullet_with_ai(section: str, original_text: str, instruction: 
 
 
 async def save_generated_resume(db: AsyncSession, user: User, title: str, profile_snapshot: Dict[str, Any], content: ResumeContentSchema) -> Resume:
-    """Save generated resume into DB."""
+    """Save generated resume into DB and initialize Version 1."""
+    content_dict = content.model_dump()
     resume = Resume(
         user_id=user.id,
         title=title,
+        version=1,
         profile_snapshot=profile_snapshot,
-        content=content.model_dump(),
+        content=content_dict,
     )
     db.add(resume)
+    await db.flush()
+
+    v1 = ResumeVersion(
+        resume_id=resume.id,
+        version_number=1,
+        title=title,
+        content=content_dict,
+        change_summary="Initial generated version",
+    )
+    db.add(v1)
+
     await db.commit()
     await db.refresh(resume)
     return resume

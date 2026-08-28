@@ -11,7 +11,7 @@ from app.schemas.profile import ProfileSchema
 logger = logging.getLogger(__name__)
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-PRIMARY_MODEL = "gemini-2.0-flash"
+PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-1.5-flash"
 
 

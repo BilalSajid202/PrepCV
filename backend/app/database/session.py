@@ -28,11 +28,19 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
+from sqlalchemy import text
+
+
 async def init_db() -> None:
-    """Initialize database tables."""
+    """Initialize database tables and run lightweight idempotent schema migrations."""
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Idempotently ensure columns added in Step 5 & 6 exist
+        await conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;"))
+        await conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS target_jd TEXT;"))
+        await conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS ats_score INTEGER;"))
+        await conn.execute(text("ALTER TABLE resumes ADD COLUMN IF NOT EXISTS ats_feedback JSON;"))
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
