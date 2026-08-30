@@ -420,3 +420,79 @@ export async function compareResumeVersions(
     `/api/resumes/${resumeId}/compare?base_version_id=${encodeURIComponent(baseVersionId)}&compared_version_id=${encodeURIComponent(comparedVersionId)}`
   );
 }
+
+// Step 8, 11, 12: Interview Prep & Feedback Types & Methods
+
+export interface InterviewQuestion {
+  id: string;
+  category: "Behavioral" | "Technical" | "Role-Specific" | string;
+  question: string;
+  difficulty?: "Easy" | "Medium" | "Hard" | string;
+  focus_area?: string;
+  source?: string;
+}
+
+export interface InterviewSession {
+  id: string;
+  user_id: string;
+  resume_id?: string | null;
+  company_name: string;
+  company_url: string;
+  job_title: string;
+  jd_text: string;
+  company_insights: Record<string, any>;
+  generated_questions: InterviewQuestion[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterviewFeedbackItem {
+  id: string;
+  session_id?: string | null;
+  user_id: string;
+  actual_questions_text: string;
+  anonymized_questions_text: string;
+  extracted_questions: string[];
+  company_tag: string;
+  role_tag: string;
+  industry_tag: string;
+  created_at: string;
+}
+
+export async function generateInterviewQuestions(params: {
+  company_name: string;
+  job_title: string;
+  company_url?: string;
+  jd_text?: string;
+  resume_id?: string;
+}): Promise<InterviewSession> {
+  return apiRequest<InterviewSession>("/api/interview/generate", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function listInterviewSessions(): Promise<InterviewSession[]> {
+  return apiRequest<InterviewSession[]>("/api/interview/sessions");
+}
+
+export async function fetchInterviewSession(sessionId: string): Promise<InterviewSession> {
+  return apiRequest<InterviewSession>(`/api/interview/sessions/${sessionId}`);
+}
+
+export async function submitInterviewFeedback(params: {
+  session_id?: string;
+  actual_questions_text: string;
+  company_name?: string;
+  job_title?: string;
+  industry?: string;
+}): Promise<InterviewFeedbackItem> {
+  return apiRequest<InterviewFeedbackItem>("/api/interview/feedback", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export async function listUserFeedback(): Promise<InterviewFeedbackItem[]> {
+  return apiRequest<InterviewFeedbackItem[]>("/api/interview/feedback");
+}
