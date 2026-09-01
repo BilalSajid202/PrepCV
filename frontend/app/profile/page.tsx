@@ -500,7 +500,7 @@ export default function ProfilePage() {
     { num: 3, title: "Education" },
     { num: 4, title: "Skills" },
     { num: 5, title: "Projects" },
-    { num: 6, title: "Certifications (Optional)" },
+    { num: 6, title: "Certifications" },
     { num: 7, title: "Review Profile" },
   ];
 

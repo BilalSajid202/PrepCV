@@ -59,10 +59,13 @@ export default function DashboardPage() {
     return "Good evening";
   };
 
-  // Compute average or highest ATS score
-  const highestAtsScore = resumes.reduce((max, r) => (r.ats_score && r.ats_score > max ? r.ats_score : max), 0) || 87;
+  // Compute highest ATS score dynamically
+  const scoredResumes = resumes.filter((r) => r.ats_score !== undefined && r.ats_score !== null);
+  const hasAtsScore = scoredResumes.length > 0;
+  const highestAtsScore = hasAtsScore ? Math.max(...scoredResumes.map((r) => r.ats_score || 0)) : 0;
 
   const getScoreTier = (score: number) => {
+    if (!hasAtsScore && score === 0) return "Not Scored";
     if (score >= 85) return "Excellent";
     if (score >= 70) return "Strong";
     if (score >= 50) return "Moderate";
@@ -70,6 +73,7 @@ export default function DashboardPage() {
   };
 
   const getScoreColor = (score: number) => {
+    if (!hasAtsScore && score === 0) return "#64748B";
     if (score >= 85) return "#16A34A";
     if (score >= 70) return "#2563EB";
     if (score >= 50) return "#F59E0B";
@@ -149,7 +153,7 @@ export default function DashboardPage() {
                 <Bot size={18} color="#2563EB" />
               </div>
               <div style={{ fontSize: "36px", fontWeight: 900, color: "#2563EB", lineHeight: 1.1 }}>
-                {sessions.length || 4}
+                {sessions.length}
               </div>
               <div style={{ fontSize: "12.5px", fontWeight: 700, color: "#64748B", marginTop: "6px" }}>
                 Prep Sessions
@@ -190,47 +194,55 @@ export default function DashboardPage() {
                   No resumes found yet. Click below to create your first ATS-optimized resume.
                 </div>
               ) : (
-                resumes.slice(0, 3).map((resume, idx) => (
-                  <div
-                    key={resume.id}
-                    onClick={() => router.push(`/resumes/${resume.id}`)}
-                    style={{
-                      padding: "18px 24px",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      borderBottom: idx < Math.min(resumes.length, 3) - 1 ? "1px solid #F1F5F9" : "none",
-                      cursor: "pointer",
-                      transition: "background-color 0.15s ease",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFFFFF")}
-                  >
-                    <div>
-                      <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0F172A", marginBottom: "2px" }}>
-                        {resume.title}
-                      </div>
-                      <div style={{ fontSize: "12px", color: "#64748B" }}>
-                        {formatTimeAgo(resume.updated_at)}
-                      </div>
-                    </div>
+                resumes.slice(0, 3).map((resume, idx) => {
+                  const hasScore = resume.ats_score !== undefined && resume.ats_score !== null;
+                  const score = resume.ats_score || 0;
+                  const badgeColor = !hasScore ? "#64748B" : score >= 85 ? "#16A34A" : score >= 70 ? "#2563EB" : score >= 50 ? "#D97706" : "#DC2626";
+                  const badgeBg = !hasScore ? "#F1F5F9" : score >= 85 ? "#F0FDF4" : score >= 70 ? "#EFF6FF" : score >= 50 ? "#FFFBEB" : "#FEF2F2";
+                  const badgeBorder = !hasScore ? "#E2E8F0" : score >= 85 ? "#BBF7D0" : score >= 70 ? "#BFDBFE" : score >= 50 ? "#FDE68A" : "#FECACA";
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                      <span style={{
-                        backgroundColor: "#F0FDF4",
-                        color: "#16A34A",
-                        border: "1px solid #BBF7D0",
-                        padding: "3px 10px",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: 700,
-                      }}>
-                        {resume.ats_score ? `${resume.ats_score}%` : "87%"}
-                      </span>
-                      <ArrowRight size={16} color="#94A3B8" />
+                  return (
+                    <div
+                      key={resume.id}
+                      onClick={() => router.push(`/resumes/${resume.id}`)}
+                      style={{
+                        padding: "18px 24px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        borderBottom: idx < Math.min(resumes.length, 3) - 1 ? "1px solid #F1F5F9" : "none",
+                        cursor: "pointer",
+                        transition: "background-color 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFFFFF")}
+                    >
+                      <div>
+                        <div style={{ fontSize: "14.5px", fontWeight: 700, color: "#0F172A", marginBottom: "2px" }}>
+                          {resume.title}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748B" }}>
+                          {formatTimeAgo(resume.updated_at)}
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                        <span style={{
+                          backgroundColor: badgeBg,
+                          color: badgeColor,
+                          border: `1px solid ${badgeBorder}`,
+                          padding: "3px 10px",
+                          borderRadius: "12px",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                        }}>
+                          {hasScore ? `${score}%` : "Not Scored"}
+                        </span>
+                        <ArrowRight size={16} color="#94A3B8" />
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
