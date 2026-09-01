@@ -21,6 +21,27 @@ import {
   restoreResumeVersion,
   compareResumeVersions,
 } from "@/lib/api";
+import {
+  Edit3,
+  Target,
+  History,
+  Save,
+  Plus,
+  FileText,
+  FileDown,
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Sparkles,
+  Zap,
+  RotateCcw,
+  Split,
+  Lightbulb,
+  ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  X,
+} from "lucide-react";
 
 function formatDisplayUrl(url?: string): string {
   if (!url) return "";
@@ -379,16 +400,18 @@ export default function ResumeEditorPage() {
         <header className="no-print" style={{
           backgroundColor: "#FFFFFF",
           borderBottom: "1px solid #E2E8F0",
-          padding: "12px 24px",
+          padding: "10px 16px",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: "10px",
           position: "sticky",
           top: 0,
           zIndex: 40,
         }}>
           {/* Left: Back Link & Title & Version Selector */}
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <button
               onClick={() => router.push("/dashboard")}
               style={{ background: "none", border: "none", color: "#64748B", fontSize: "13.5px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
@@ -396,7 +419,7 @@ export default function ResumeEditorPage() {
               ← Back
             </button>
 
-            <div style={{ height: "24px", width: "1px", backgroundColor: "#E2E8F0" }} />
+            <div style={{ height: "20px", width: "1px", backgroundColor: "#E2E8F0" }} />
 
             <div>
               <input
@@ -404,7 +427,7 @@ export default function ResumeEditorPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={{
-                  fontSize: "16px",
+                  fontSize: "15px",
                   fontWeight: 700,
                   color: "#0F172A",
                   border: "1px solid transparent",
@@ -412,7 +435,8 @@ export default function ResumeEditorPage() {
                   padding: "2px 6px",
                   backgroundColor: "transparent",
                   outline: "none",
-                  width: "240px",
+                  maxWidth: "200px",
+                  width: "100%",
                 }}
                 onFocus={(e) => (e.target.style.borderColor = "#CBD5E1")}
                 onBlur={(e) => (e.target.style.borderColor = "transparent")}
@@ -438,14 +462,14 @@ export default function ResumeEditorPage() {
                 }}
                 title="Click to view Version History"
               >
-                <span>Version {activeVersionNum}</span>
+                <span>v{activeVersionNum}</span>
                 <span style={{ fontSize: "10px" }}>▼</span>
               </span>
             </div>
           </div>
 
           {/* Center: Connected Workspace Mode Tabs */}
-          <div style={{ display: "flex", backgroundColor: "#F1F5F9", padding: "4px", borderRadius: "8px", gap: "4px" }}>
+          <div style={{ display: "flex", backgroundColor: "#F1F5F9", padding: "4px", borderRadius: "8px", gap: "4px", overflowX: "auto" }}>
             <button
               onClick={() => setActiveTab("editor")}
               style={{
@@ -463,7 +487,8 @@ export default function ResumeEditorPage() {
                 gap: "6px",
               }}
             >
-              <span>✏️</span> Resume Editor
+              <Edit3 size={15} />
+              <span>Resume Editor</span>
             </button>
 
             <button
@@ -483,7 +508,8 @@ export default function ResumeEditorPage() {
                 gap: "6px",
               }}
             >
-              <span>🎯</span> ATS Match {atsScoreResult ? `(${atsScoreResult.overall_score}%)` : "Checker"}
+              <Target size={15} />
+              <span>ATS Match {atsScoreResult ? `(${atsScoreResult.overall_score}%)` : "Checker"}</span>
             </button>
 
             <button
@@ -503,12 +529,13 @@ export default function ResumeEditorPage() {
                 gap: "6px",
               }}
             >
-              <span>🕐</span> Versions & Diff ({versions.length})
+              <History size={15} />
+              <span>Versions & Diff ({versions.length})</span>
             </button>
           </div>
 
           {/* Right: Actions */}
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -516,14 +543,18 @@ export default function ResumeEditorPage() {
                 backgroundColor: "#2563EB",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "7px 14px",
+                padding: "7px 12px",
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              {saving ? "Saving..." : "💾 Save Changes"}
+              <Save size={14} />
+              <span>{saving ? "Saving..." : "Save"}</span>
             </button>
 
             <button
@@ -532,7 +563,7 @@ export default function ResumeEditorPage() {
                 backgroundColor: "#7C3AED",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "7px 14px",
+                padding: "7px 12px",
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontWeight: 600,
@@ -542,10 +573,11 @@ export default function ResumeEditorPage() {
                 gap: "4px",
               }}
             >
-              <span>＋</span> Save as New Version
+              <Plus size={14} />
+              <span className="hide-on-mobile">Save as</span> New Version
             </button>
 
-            <div style={{ height: "20px", width: "1px", backgroundColor: "#E2E8F0", margin: "0 4px" }} />
+            <div style={{ height: "20px", width: "1px", backgroundColor: "#E2E8F0", margin: "0 2px" }} />
 
             <button
               onClick={handleExportDocx}
@@ -554,14 +586,18 @@ export default function ResumeEditorPage() {
                 backgroundColor: "#0D9488",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "7px 12px",
+                padding: "7px 10px",
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: exportingDocx ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              {exportingDocx ? "Exporting..." : "📝 Word"}
+              <FileText size={14} />
+              <span>{exportingDocx ? "..." : "Word"}</span>
             </button>
 
             <button
@@ -570,36 +606,43 @@ export default function ResumeEditorPage() {
                 backgroundColor: "#0F172A",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "7px 14px",
+                padding: "7px 12px",
                 borderRadius: "6px",
                 fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              📑 PDF
+              <FileDown size={14} />
+              <span>PDF</span>
             </button>
           </div>
         </header>
 
         {/* Notifications */}
         {errorMsg && (
-          <div className="no-print" style={{ backgroundColor: "#FEF2F2", color: "#DC2626", padding: "10px 24px", fontSize: "14px" }}>
-            ⚠️ {errorMsg}
+          <div className="no-print" style={{ backgroundColor: "#FEF2F2", color: "#DC2626", padding: "10px 24px", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <AlertTriangle size={16} />
+            <span>{errorMsg}</span>
           </div>
         )}
         {successMsg && (
-          <div className="no-print" style={{ backgroundColor: "#F0FDF4", color: "#16A34A", padding: "10px 24px", fontSize: "14px" }}>
-            ✓ {successMsg}
+          <div className="no-print" style={{ backgroundColor: "#F0FDF4", color: "#16A34A", padding: "10px 24px", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <Check size={16} />
+            <span>{successMsg}</span>
           </div>
         )}
 
         {/* TAB 1: RESUME EDITOR & LIVE CANVAS */}
         {activeTab === "editor" && (
-          <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          <div style={{ display: "flex", flex: 1, flexWrap: "wrap", overflow: "auto" }}>
             {/* Left Editor Pane */}
             <div className="no-print" style={{
-              width: "460px",
+              flex: "1 1 380px",
+              maxWidth: "100%",
               backgroundColor: "#FFFFFF",
               borderRight: "1px solid #E2E8F0",
               padding: "20px",
@@ -628,9 +671,10 @@ export default function ResumeEditorPage() {
                   <span style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>Executive Summary</span>
                   <button
                     onClick={() => handleAiImproveBullet("summary", content.summary, "Make punchy, executive-level, and tailored for impact")}
-                    style={{ fontSize: "12px", color: "#7C3AED", backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", padding: "4px 10px", borderRadius: "4px", cursor: "pointer", fontWeight: 600 }}
+                    style={{ fontSize: "12px", color: "#7C3AED", backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", padding: "4px 10px", borderRadius: "4px", cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    ✨ AI Improve
+                    <Sparkles size={13} />
+                    <span>AI Improve</span>
                   </button>
                 </div>
                 <textarea
@@ -668,9 +712,10 @@ export default function ResumeEditorPage() {
                           />
                           <button
                             onClick={() => handleAiImproveBullet("bullet", bullet, "Add quantifiable metrics and high-impact action verbs", expIdx, bulletIdx)}
-                            style={{ fontSize: "11px", color: "#7C3AED", backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", padding: "0 8px", borderRadius: "4px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}
+                            style={{ fontSize: "11px", color: "#7C3AED", backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", padding: "0 8px", borderRadius: "4px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "3px" }}
                           >
-                            ✨ Improve
+                            <Sparkles size={12} />
+                            <span>Improve</span>
                           </button>
                         </div>
                       </div>
@@ -695,9 +740,10 @@ export default function ResumeEditorPage() {
                           const updated = content.skills.filter((_, i) => i !== sIdx);
                           setContent({ ...content, skills: updated });
                         }}
-                        style={{ border: "none", background: "none", color: "#94A3B8", cursor: "pointer", fontSize: "12px", padding: 0 }}
+                        style={{ border: "none", background: "none", color: "#94A3B8", cursor: "pointer", fontSize: "12px", padding: 0, display: "inline-flex", alignItems: "center" }}
+                        title="Remove skill"
                       >
-                        ×
+                        <X size={12} />
                       </button>
                     </span>
                   ))}
@@ -728,16 +774,17 @@ export default function ResumeEditorPage() {
                         input.value = "";
                       }
                     }}
-                    style={{ padding: "6px 12px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                    style={{ padding: "6px 12px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "4px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                   >
-                    + Add
+                    <Plus size={13} />
+                    <span>Add</span>
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Right Live ATS Document Canvas */}
-            <div style={{ flex: 1, padding: "20px", overflowY: "auto", display: "flex", justifyContent: "center" }}>
+            <div style={{ flex: "1 1 450px", minWidth: 0, padding: "16px", overflowY: "auto", display: "flex", justifyContent: "center" }}>
               {htmlPreview ? (
                 <div style={{ width: "100%", maxWidth: "850px", minHeight: "297mm", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", borderRadius: "4px", overflow: "hidden", backgroundColor: "#FFFFFF" }}>
                   <iframe
@@ -818,8 +865,9 @@ export default function ResumeEditorPage() {
             <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px", marginBottom: "24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                 <div>
-                  <h2 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 4px 0" }}>
-                    🎯 ATS Job Description Match Analyzer
+                  <h2 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 4px 0", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Target size={20} color="#2563EB" />
+                    <span>ATS Job Description Match Analyzer</span>
                   </h2>
                   <p style={{ fontSize: "13.5px", color: "#64748B", margin: 0 }}>
                     Score your working resume draft against the target job requirements and fix keyword gaps.
@@ -827,9 +875,10 @@ export default function ResumeEditorPage() {
                 </div>
                 <button
                   onClick={() => setTargetJd(SAMPLE_JD)}
-                  style={{ fontSize: "12.5px", color: "#7C3AED", fontWeight: 600, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  style={{ fontSize: "12.5px", color: "#7C3AED", fontWeight: 600, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", display: "flex", alignItems: "center", gap: "4px" }}
                 >
-                  ✨ Load Example JD
+                  <Sparkles size={13} />
+                  <span>Load Example JD</span>
                 </button>
               </div>
 
@@ -853,9 +902,14 @@ export default function ResumeEditorPage() {
                   fontSize: "14px",
                   fontWeight: 700,
                   cursor: atsAnalyzing ? "not-allowed" : "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
                 }}
               >
-                {atsAnalyzing ? "⚡ Analyzing Match..." : atsScoreResult ? "🔄 Re-calculate ATS Score" : "Analyze ATS Match →"}
+                <Zap size={16} />
+                <span>{atsAnalyzing ? "Analyzing Match..." : atsScoreResult ? "Re-calculate ATS Score" : "Analyze ATS Match"}</span>
+                {!atsAnalyzing && !atsScoreResult && <ArrowRight size={16} />}
               </button>
             </div>
 
@@ -863,7 +917,7 @@ export default function ResumeEditorPage() {
             {atsScoreResult && (
               <div>
                 {/* Hero Score Box */}
-                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px", marginBottom: "24px", display: "grid", gridTemplateColumns: "220px 1fr", gap: "28px", alignItems: "center" }}>
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px", marginBottom: "24px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "24px", alignItems: "center" }}>
                   <div style={{ textAlign: "center", borderRight: "1px solid #E2E8F0", paddingRight: "20px" }}>
                     <div style={{ fontSize: "12px", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>ATS MATCH</div>
                     <div style={{ fontSize: "52px", fontWeight: 900, color: getScoreColor(atsScoreResult.overall_score), lineHeight: 1.1 }}>
@@ -873,8 +927,9 @@ export default function ResumeEditorPage() {
                       {atsScoreResult.score_tier}
                     </div>
                     {atsScoreResult.score_change !== null && atsScoreResult.score_change !== undefined && (
-                      <div style={{ marginTop: "8px", fontSize: "12px", fontWeight: 700, color: atsScoreResult.score_change >= 0 ? "#16A34A" : "#EF4444" }}>
-                        {atsScoreResult.score_change >= 0 ? `↑ +${atsScoreResult.score_change} pts` : `↓ ${atsScoreResult.score_change} pts`}
+                      <div style={{ marginTop: "8px", fontSize: "12px", fontWeight: 700, color: atsScoreResult.score_change >= 0 ? "#16A34A" : "#EF4444", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                        {atsScoreResult.score_change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                        <span>{atsScoreResult.score_change >= 0 ? `+${atsScoreResult.score_change} pts` : `${atsScoreResult.score_change} pts`}</span>
                       </div>
                     )}
                     <div style={{ fontSize: "12px", color: "#64748B", marginTop: "8px" }}>
@@ -886,7 +941,7 @@ export default function ResumeEditorPage() {
                     <h3 style={{ fontSize: "16px", fontWeight: 700, margin: "0 0 6px 0", color: "#0F172A" }}>
                       {atsScoreResult.score_summary}
                     </h3>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: "12px", marginTop: "16px" }}>
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
                           <span>Keyword Match</span>
@@ -910,11 +965,12 @@ export default function ResumeEditorPage() {
                 </div>
 
                 {/* Missing Keywords & Recommendations */}
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "24px", marginBottom: "24px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "24px", marginBottom: "24px" }}>
                   {/* Missing Keywords */}
                   <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px" }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0" }}>
-                      ⚠️ Missing from Resume ({atsScoreResult.missing_keywords.length})
+                    <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <AlertTriangle size={16} color="#DC2626" />
+                      <span>Missing from Resume ({atsScoreResult.missing_keywords.length})</span>
                     </h3>
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {atsScoreResult.missing_keywords.map((kw, i) => (
@@ -925,9 +981,10 @@ export default function ResumeEditorPage() {
                           </div>
                           <button
                             onClick={() => handleAddMissingSkill(kw.skill)}
-                            style={{ padding: "4px 10px", borderRadius: "4px", border: "none", backgroundColor: "#16A34A", color: "#FFFFFF", fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}
+                            style={{ padding: "4px 10px", borderRadius: "4px", border: "none", backgroundColor: "#16A34A", color: "#FFFFFF", fontSize: "11.5px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                           >
-                            + Add to Skills
+                            <Plus size={12} />
+                            <span>Add to Skills</span>
                           </button>
                         </div>
                       ))}
@@ -936,13 +993,15 @@ export default function ResumeEditorPage() {
 
                   {/* Matching Skills */}
                   <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px" }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0" }}>
-                      ✅ Matching Skills ({atsScoreResult.matching_skills.length})
+                    <h3 style={{ fontSize: "15px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <CheckCircle2 size={16} color="#16A34A" />
+                      <span>Matching Skills ({atsScoreResult.matching_skills.length})</span>
                     </h3>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                       {atsScoreResult.matching_skills.map((skill, i) => (
-                        <span key={i} style={{ padding: "4px 10px", borderRadius: "16px", backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", color: "#15803D", fontSize: "12.5px", fontWeight: 600 }}>
-                          ✓ {skill}
+                        <span key={i} style={{ padding: "4px 10px", borderRadius: "16px", backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", color: "#15803D", fontSize: "12.5px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <Check size={12} />
+                          <span>{skill}</span>
                         </span>
                       ))}
                     </div>
@@ -951,8 +1010,9 @@ export default function ResumeEditorPage() {
 
                 {/* Concrete Suggestions */}
                 <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px" }}>
-                  <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0" }}>
-                    💡 Actionable Recommendations
+                  <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Lightbulb size={18} color="#2563EB" />
+                    <span>Actionable Recommendations</span>
                   </h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "14px" }}>
                     {atsScoreResult.recommendations.map((rec, i) => (
@@ -962,9 +1022,10 @@ export default function ResumeEditorPage() {
                         {rec.action_type === "add_skill" && rec.target_text && (
                           <button
                             onClick={() => handleAddMissingSkill(rec.target_text!)}
-                            style={{ padding: "4px 10px", backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", borderRadius: "4px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer" }}
+                            style={{ padding: "4px 10px", backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", borderRadius: "4px", fontSize: "11.5px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                           >
-                            + Add Skill
+                            <Plus size={12} />
+                            <span>Add Skill</span>
                           </button>
                         )}
                       </div>
@@ -983,8 +1044,9 @@ export default function ResumeEditorPage() {
             <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px", marginBottom: "24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <div>
-                  <h2 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 4px 0" }}>
-                    🕐 Version History
+                  <h2 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 4px 0", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <History size={20} color="#7C3AED" />
+                    <span>Version History</span>
                   </h2>
                   <p style={{ fontSize: "13.5px", color: "#64748B", margin: 0 }}>
                     Every meaningful update is archived. Restoring an older version creates a new increment without deleting history.
@@ -992,9 +1054,10 @@ export default function ResumeEditorPage() {
                 </div>
                 <button
                   onClick={() => setShowSaveVersionModal(true)}
-                  style={{ padding: "8px 16px", backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                  style={{ padding: "8px 16px", backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
-                  ＋ Save New Version
+                  <Plus size={14} />
+                  <span>Save New Version</span>
                 </button>
               </div>
 
@@ -1042,9 +1105,10 @@ export default function ResumeEditorPage() {
                         {!isCurrent && (
                           <button
                             onClick={() => setRestoreConfirmVersion(v)}
-                            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #CBD5E1", backgroundColor: "#FFFFFF", color: "#2563EB", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #CBD5E1", backgroundColor: "#FFFFFF", color: "#2563EB", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px" }}
                           >
-                            ♻️ Restore Version
+                            <RotateCcw size={13} />
+                            <span>Restore Version</span>
                           </button>
                         )}
                       </div>
@@ -1057,11 +1121,12 @@ export default function ResumeEditorPage() {
             {/* Version Diff & Compare Section */}
             {versions.length >= 2 && (
               <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "24px" }}>
-                <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0" }}>
-                  🔍 Side-by-Side Version Diff & Score Comparison
+                <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Split size={18} color="#2563EB" />
+                  <span>Side-by-Side Version Diff & Score Comparison</span>
                 </h3>
-                <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px" }}>
-                  <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: "200px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "4px" }}>Base Version (Older)</label>
                     <select
                       value={diffBaseId}
@@ -1078,7 +1143,7 @@ export default function ResumeEditorPage() {
 
                   <div style={{ fontSize: "18px", color: "#94A3B8", marginTop: "16px" }}>→</div>
 
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: "200px" }}>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: "#64748B", display: "block", marginBottom: "4px" }}>Compared Version (Newer)</label>
                     <select
                       value={diffComparedId}
@@ -1096,9 +1161,10 @@ export default function ResumeEditorPage() {
                   <button
                     onClick={handleRunDiff}
                     disabled={loadingDiff || !diffBaseId || !diffComparedId}
-                    style={{ marginTop: "18px", padding: "9px 18px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                    style={{ marginTop: "18px", padding: "9px 18px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
                   >
-                    {loadingDiff ? "Comparing..." : "Compare Diffs"}
+                    <Split size={14} />
+                    <span>{loadingDiff ? "Comparing..." : "Compare Diffs"}</span>
                   </button>
                 </div>
 
@@ -1111,8 +1177,18 @@ export default function ResumeEditorPage() {
                         Score Evolution: v{diffResult.base_version.version_number} ({diffResult.base_version.ats_score || "N/A"}%) → v{diffResult.compared_version.version_number} ({diffResult.compared_version.ats_score || "N/A"}%)
                       </span>
                       {diffResult.diff.ats_score?.score_diff !== null && diffResult.diff.ats_score?.score_diff !== undefined && (
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: diffResult.diff.ats_score.score_diff >= 0 ? "#16A34A" : "#EF4444" }}>
-                          {diffResult.diff.ats_score.score_diff >= 0 ? `+${diffResult.diff.ats_score.score_diff} pts improvement ↑` : `${diffResult.diff.ats_score.score_diff} pts`}
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: diffResult.diff.ats_score.score_diff >= 0 ? "#16A34A" : "#EF4444", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          {diffResult.diff.ats_score.score_diff >= 0 ? (
+                            <>
+                              <TrendingUp size={14} />
+                              <span>+{diffResult.diff.ats_score.score_diff} pts improvement</span>
+                            </>
+                          ) : (
+                            <>
+                              <TrendingDown size={14} />
+                              <span>{diffResult.diff.ats_score.score_diff} pts</span>
+                            </>
+                          )}
                         </span>
                       )}
                     </div>
@@ -1151,7 +1227,7 @@ export default function ResumeEditorPage() {
         {/* Modal: Save as New Version */}
         {showSaveVersionModal && (
           <div className="no-print" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "28px", maxWidth: "460px", width: "90%" }}>
+            <div className="responsive-modal-card" style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "24px" }}>
               <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0" }}>
                 Save as Version {activeVersionNum + 1}
               </h3>
@@ -1189,7 +1265,7 @@ export default function ResumeEditorPage() {
         {/* Modal: Restore Version Confirmation */}
         {restoreConfirmVersion && (
           <div className="no-print" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "28px", maxWidth: "480px", width: "90%" }}>
+            <div className="responsive-modal-card" style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "24px" }}>
               <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 8px 0" }}>
                 Restore Version {restoreConfirmVersion.version_number}?
               </h3>
@@ -1222,16 +1298,18 @@ export default function ResumeEditorPage() {
         {/* AI Suggestion Modal */}
         {aiSuggestion && (
           <div className="no-print" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-            <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "28px", maxWidth: "500px", width: "90%" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: "#7C3AED", marginBottom: "12px" }}>
-                ✨ AI Improvement Suggestion
+            <div className="responsive-modal-card" style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "24px" }}>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: "#7C3AED", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sparkles size={18} />
+                <span>AI Improvement Suggestion</span>
               </div>
               <div style={{ backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", padding: "14px", borderRadius: "8px", fontSize: "14px", color: "#0F172A", marginBottom: "12px", lineHeight: 1.5 }}>
                 "{aiSuggestion.text}"
               </div>
               {aiSuggestion.explanation && (
-                <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "20px" }}>
-                  💡 {aiSuggestion.explanation}
+                <div style={{ fontSize: "12px", color: "#64748B", marginBottom: "20px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Lightbulb size={14} color="#D97706" />
+                  <span>{aiSuggestion.explanation}</span>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>

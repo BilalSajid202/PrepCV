@@ -11,6 +11,16 @@ import {
   listUserResumes,
   generateInterviewQuestions,
 } from "@/lib/api";
+import {
+  Bot,
+  Sparkles,
+  AlertCircle,
+  Copy,
+  Check,
+  Plus,
+  ArrowRight,
+  Lightbulb,
+} from "lucide-react";
 
 const SAMPLE_JD = `Senior Backend & Distributed Systems Engineer
 Company: Stripe
@@ -79,12 +89,12 @@ export default function InterviewPrepPage() {
       setErrorMsg(null);
 
       // Visual progress feedback
-      setGenerationStep("🔍 Researching company intelligence with Tavily...");
+      setGenerationStep("Researching company intelligence with Tavily...");
       setTimeout(() => {
-        setGenerationStep("🧠 Querying past interview questions in RAG memory...");
+        setGenerationStep("Querying past interview questions in RAG memory...");
       }, 2500);
       setTimeout(() => {
-        setGenerationStep("⚡ Synthesizing tailored Behavioral, Technical & Role-Specific questions...");
+        setGenerationStep("Synthesizing tailored Behavioral, Technical & Role-Specific questions...");
       }, 5500);
 
       const session = await generateInterviewQuestions({
@@ -138,8 +148,9 @@ export default function InterviewPrepPage() {
           
           {/* Header */}
           <div style={{ marginBottom: "24px" }}>
-            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
-              💬 AI Interview Question Generator
+            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Bot size={24} color="#7C3AED" />
+              <span>AI Interview Question Generator</span>
             </h1>
             <p style={{ fontSize: "14px", color: "#64748B", margin: 0 }}>
               Generate a tailored question set combining live company intelligence, target job requirements, and past interview data.
@@ -147,29 +158,31 @@ export default function InterviewPrepPage() {
           </div>
 
           {errorMsg && (
-            <div style={{ backgroundColor: "#FEF2F2", color: "#DC2626", padding: "12px 16px", borderRadius: "8px", marginBottom: "20px", fontSize: "13.5px" }}>
-              ⚠️ {errorMsg}
+            <div style={{ backgroundColor: "#FEF2F2", color: "#DC2626", padding: "12px 16px", borderRadius: "8px", marginBottom: "20px", fontSize: "13.5px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <AlertCircle size={16} />
+              <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* Form Card (Hidden or collapsible when results are generated) */}
+          {/* Form Card */}
           {!createdSession ? (
             <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
                 <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
                   Target Role & Company Details
                 </h2>
                 <button
                   type="button"
                   onClick={handleFillSample}
-                  style={{ background: "none", border: "none", color: "#7C3AED", fontSize: "13px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+                  style={{ background: "none", border: "none", color: "#7C3AED", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
                 >
-                  ✨ Load Example (Stripe)
+                  <Sparkles size={14} />
+                  <span>Load Example (Stripe)</span>
                 </button>
               </div>
 
               <form onSubmit={handleGenerate} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
                       Target Company Name *
@@ -198,7 +211,7 @@ export default function InterviewPrepPage() {
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
                       Target Job Title *
@@ -258,20 +271,23 @@ export default function InterviewPrepPage() {
                       fontSize: "14px",
                       fontWeight: 700,
                       cursor: generating ? "not-allowed" : "pointer",
-                      display: "flex",
+                      boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
+                      display: "inline-flex",
                       alignItems: "center",
                       gap: "8px",
                     }}
                   >
-                    {generating ? "⚡ Preparing Session..." : "Generate Tailored Questions →"}
+                    <span>{generating ? "Generating Question Bank..." : "Generate Interview Questions"}</span>
+                    {!generating && <ArrowRight size={16} />}
                   </button>
                 </div>
               </form>
 
               {generating && (
                 <div style={{ marginTop: "24px", padding: "16px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0", textAlign: "center" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#2563EB", marginBottom: "4px" }}>
-                    {generationStep}
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#2563EB", marginBottom: "4px", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                    <Sparkles size={16} />
+                    <span>{generationStep}</span>
                   </div>
                   <div style={{ fontSize: "12px", color: "#64748B" }}>
                     Analyzing company domain, engineering requirements, and interview patterns...
@@ -281,41 +297,38 @@ export default function InterviewPrepPage() {
             </div>
           ) : (
             /* Results View */
-            <div>
-              {/* Top Banner with Company Info & New Search Button */}
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "20px 24px", marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ animation: "fadeIn 0.3s ease-in-out" }}>
+              {/* Session Overview Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A" }}>
-                      {createdSession.company_name}
-                    </span>
-                    <span style={{ backgroundColor: "#EFF6FF", color: "#2563EB", fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px" }}>
-                      {createdSession.job_title}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: "12.5px", color: "#64748B" }}>
-                    {createdSession.generated_questions.length} Tailored Questions Generated • Verified ATS & RAG Alignment
+                  <h2 style={{ fontSize: "20px", fontWeight: 800, color: "#0F172A", margin: "0 0 2px 0" }}>
+                    {createdSession.company_name} — {createdSession.job_title}
+                  </h2>
+                  <div style={{ fontSize: "13px", color: "#64748B" }}>
+                    Generated {createdSession.generated_questions.length} questions tailored with live web intel & RAG feedback.
                   </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "10px" }}>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                   <button
                     onClick={handleCopyAll}
-                    style={{ padding: "8px 14px", backgroundColor: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, color: "#334155", cursor: "pointer" }}
+                    style={{ padding: "8px 14px", backgroundColor: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
                   >
-                    📋 Copy All
+                    <Copy size={14} />
+                    <span>Copy All</span>
                   </button>
                   <button
                     onClick={() => setCreatedSession(null)}
-                    style={{ padding: "8px 16px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
+                    style={{ padding: "8px 16px", backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
                   >
-                    ＋ New Question Set
+                    <Plus size={14} />
+                    <span>New Set</span>
                   </button>
                 </div>
               </div>
 
               {/* Category Filter Switcher */}
-              <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
                 {["All", "Behavioral", "Technical", "Role-Specific"].map((cat) => {
                   const count =
                     cat === "All"
@@ -359,8 +372,8 @@ export default function InterviewPrepPage() {
                         boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                           <span style={{ backgroundColor: catStyle.bg, color: catStyle.text, border: `1px solid ${catStyle.border}`, padding: "2px 8px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700 }}>
                             {q.category}
                           </span>
@@ -375,8 +388,9 @@ export default function InterviewPrepPage() {
                             </span>
                           )}
                           {q.source === "rag_community_feedback" && (
-                            <span style={{ backgroundColor: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", fontWeight: 700 }}>
-                              💡 Real Interview Feedback
+                            <span style={{ backgroundColor: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              <Lightbulb size={12} />
+                              <span>Real Interview Feedback</span>
                             </span>
                           )}
                         </div>
@@ -392,9 +406,22 @@ export default function InterviewPrepPage() {
                             fontWeight: 600,
                             color: isCopied ? "#16A34A" : "#64748B",
                             cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
                           }}
                         >
-                          {isCopied ? "✓ Copied" : "Copy"}
+                          {isCopied ? (
+                            <>
+                              <Check size={12} />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={12} />
+                              <span>Copy</span>
+                            </>
+                          )}
                         </button>
                       </div>
 
@@ -407,7 +434,7 @@ export default function InterviewPrepPage() {
               </div>
 
               {/* Bottom CTA for Feedback Logging */}
-              <div style={{ marginTop: "28px", padding: "20px", backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px dashed #CBD5E1", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ marginTop: "28px", padding: "20px", backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px dashed #CBD5E1", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
                 <div>
                   <strong style={{ fontSize: "14px", color: "#0F172A", display: "block" }}>
                     Did you complete your real interview at {createdSession.company_name}?
@@ -418,9 +445,11 @@ export default function InterviewPrepPage() {
                 </div>
                 <button
                   onClick={() => router.push(`/interview-feedback?company=${encodeURIComponent(createdSession.company_name)}&role=${encodeURIComponent(createdSession.job_title)}&sessionId=${encodeURIComponent(createdSession.id)}`)}
-                  style={{ padding: "8px 16px", backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                  style={{ padding: "8px 16px", backgroundColor: "#7C3AED", color: "#FFFFFF", border: "none", borderRadius: "6px", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "6px" }}
                 >
-                  💡 Log Interview Feedback →
+                  <Lightbulb size={14} />
+                  <span>Log Interview Feedback</span>
+                  <ArrowRight size={14} />
                 </button>
               </div>
             </div>

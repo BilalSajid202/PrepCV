@@ -463,10 +463,10 @@ async def generate_ats_resume_content(profile_dict: Dict[str, Any], target_role:
     )
 
 
-async def improve_bullet_with_ai(section: str, original_text: str, instruction: str) -> Dict[str, str]:
+async def improve_bullet_with_ai(section: str, original_text: str, instruction: str, user_id: Optional[str] = None) -> Dict[str, str]:
     """Improve specific section text or bullet point using Hugging Face Qwen with input sanitization."""
     from app.integrations.huggingface.client import improve_bullet_with_hf
-    return await improve_bullet_with_hf(section=section, original_text=original_text, instruction=instruction)
+    return await improve_bullet_with_hf(section=section, original_text=original_text, instruction=instruction, user_id=user_id)
 
 
 async def save_generated_resume(db: AsyncSession, user: User, title: str, profile_snapshot: Dict[str, Any], content: ResumeContentSchema) -> Resume:

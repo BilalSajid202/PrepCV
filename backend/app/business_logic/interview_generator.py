@@ -211,13 +211,31 @@ CRITICAL RULES:
                 "past_real_interview_feedback_examples": [f["question"] for f in rag_feedback_examples]
             })
 
-            raw_response = await _call_hf_json_api(
+            from app.integrations.huggingface.client import log_ai_usage
+
+            api_result = await _call_hf_json_api(
                 system_instruction=system_instruction,
                 user_payload=user_payload,
                 retry_count=1,
             )
 
-            if raw_response:
+            if api_result:
+                raw_response = api_result["content"]
+                usage = api_result.get("usage", {})
+
+                # Log AI token usage
+                await log_ai_usage(
+                    user_id=user.id,
+                    feature="interview_prep",
+                    model=api_result.get("model", ""),
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                    response_time_ms=api_result.get("response_time_ms", 0),
+                    status="success",
+                    api_key_hint=api_result.get("api_key_hint", ""),
+                )
+
                 clean_json = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
                 json_match = re.search(r"\{[\s\S]*\}", clean_json)
                 if json_match:

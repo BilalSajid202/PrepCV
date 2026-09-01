@@ -128,6 +128,64 @@ class RecentUser(BaseModel):
     created_at: datetime
 
 
+class AIUsageLogEntry(BaseModel):
+    id: str
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
+    feature: str
+    model: str
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    response_time_ms: int
+    status: str
+    api_key_hint: str
+    error_message: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AIFeatureUsageBreakdown(BaseModel):
+    feature: str
+    feature_name: str
+    total_calls: int
+    total_tokens: int
+    input_tokens: int
+    output_tokens: int
+    avg_response_time_ms: int
+
+
+class AIUserUsageStat(BaseModel):
+    user_id: str
+    full_name: str
+    email: str
+    total_calls: int
+    total_tokens: int
+    last_used_at: Optional[datetime] = None
+
+
+class AIModelUsageStat(BaseModel):
+    model: str
+    total_calls: int
+    total_tokens: int
+
+
+class AIUsageStats(BaseModel):
+    total_calls: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_tokens: int = 0
+    avg_response_time_ms: int = 0
+    active_keys_count: int = 0
+    total_keys_count: int = 0
+    feature_breakdown: list[AIFeatureUsageBreakdown] = []
+    top_users: list[AIUserUsageStat] = []
+    model_breakdown: list[AIModelUsageStat] = []
+    recent_logs: list[AIUsageLogEntry] = []
+
+
 class AdminDashboardStats(BaseModel):
     total_users: int
     active_users: int
@@ -139,3 +197,5 @@ class AdminDashboardStats(BaseModel):
     total_features: int
     feature_usage: list[FeatureUsageStat] = []
     recent_users: list[RecentUser] = []
+    ai_usage: Optional[AIUsageStats] = None
+

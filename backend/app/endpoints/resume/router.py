@@ -142,7 +142,8 @@ async def ai_improve(
     res = await improve_bullet_with_ai(
         section=req.section,
         original_text=req.text,
-        instruction=req.instruction or "Improve for impact"
+        instruction=req.instruction or "Improve for impact",
+        user_id=current_user.id,
     )
     return AIImproveResponse(
         original_text=req.text,
@@ -160,7 +161,8 @@ async def score_direct_content(
     content_dict = req.content.model_dump() if req.content else {}
     score_data = await score_resume_against_jd(
         job_description=req.job_description,
-        resume_content=content_dict
+        resume_content=content_dict,
+        user_id=current_user.id,
     )
     return ATSScoreResponse(
         overall_score=score_data.get("overall_score", 0),
@@ -283,7 +285,8 @@ async def score_saved_resume(
     
     score_data = await score_resume_against_jd(
         job_description=req.job_description,
-        resume_content=content_dict
+        resume_content=content_dict,
+        user_id=current_user.id,
     )
 
     new_score = score_data.get("overall_score", 0)

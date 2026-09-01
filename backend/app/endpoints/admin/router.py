@@ -12,6 +12,7 @@ from app.business_logic.admin import (
     bulk_assign_feature,
     create_feature,
     delete_feature,
+    get_ai_usage_analytics,
     get_all_features,
     get_all_users,
     get_current_user_features,
@@ -28,6 +29,7 @@ from app.database.session import get_db_session
 from app.endpoints.auth.deps import get_current_admin, get_current_user
 from app.schemas.admin import (
     AdminDashboardStats,
+    AIUsageStats,
     BulkFeatureAssignRequest,
     FeatureCreateRequest,
     FeatureResponse,
@@ -52,6 +54,15 @@ async def dashboard(
 ) -> AdminDashboardStats:
     """Get admin dashboard analytics."""
     return await get_dashboard_stats(db)
+
+
+@router.get("/ai-usage", response_model=AIUsageStats)
+async def ai_usage_analytics(
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db_session),
+) -> AIUsageStats:
+    """Get standalone AI model token usage and call analytics."""
+    return await get_ai_usage_analytics(db)
 
 
 # ─── User Management ────────────────────────────────────────────────────────

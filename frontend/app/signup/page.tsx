@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { Check, Sparkles, Eye, EyeOff, ArrowRight } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -75,23 +76,30 @@ export default function SignupPage() {
 
           <ul className="brand-features">
             <li>
-              <span className="feature-check">✓</span>
+              <span className="feature-check" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Check size={14} />
+              </span>
               <span>Build an ATS-friendly resume.</span>
             </li>
             <li>
-              <span className="feature-check">✓</span>
+              <span className="feature-check" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Check size={14} />
+              </span>
               <span>Practice job-specific interviews.</span>
             </li>
             <li>
-              <span className="feature-check">✓</span>
+              <span className="feature-check" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Check size={14} />
+              </span>
               <span>Improve with every application.</span>
             </li>
           </ul>
         </div>
 
         <div className="brand-footer">
-          <div className="ai-badge">
-            ✦ AI-powered career preparation
+          <div className="ai-badge" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <Sparkles size={14} />
+            <span>AI-powered career preparation</span>
           </div>
         </div>
       </div>
@@ -167,8 +175,9 @@ export default function SignupPage() {
                   className="password-toggle-btn"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                  {showPassword ? "🙈" : "👁"}
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
 
@@ -206,8 +215,10 @@ export default function SignupPage() {
               type="submit"
               disabled={submitting}
               className="btn-primary"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
             >
-              {submitting ? "Creating Account..." : "Create Account →"}
+              <span>{submitting ? "Creating Account..." : "Create Account"}</span>
+              {!submitting && <ArrowRight size={16} />}
             </button>
           </form>
 

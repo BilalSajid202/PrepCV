@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import (
+    AIUsageLog,
     Feature,
     InterviewFeedback,
     InterviewSession,
@@ -20,6 +21,11 @@ from app.database.models import (
 )
 from app.schemas.admin import (
     AdminDashboardStats,
+    AIFeatureUsageBreakdown,
+    AIModelUsageStat,
+    AIUsageLogEntry,
+    AIUsageStats,
+    AIUserUsageStat,
     FeatureCreateRequest,
     FeatureResponse,
     FeatureUpdateRequest,
@@ -446,6 +452,9 @@ async def get_dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         for u in recent_result.scalars().all()
     ]
 
+    # AI Usage Analytics
+    ai_usage = await get_ai_usage_analytics(db)
+
     return AdminDashboardStats(
         total_users=total_users,
         active_users=active_users,
@@ -457,6 +466,175 @@ async def get_dashboard_stats(db: AsyncSession) -> AdminDashboardStats:
         total_features=total_features,
         feature_usage=feature_usage,
         recent_users=recent_users,
+        ai_usage=ai_usage,
+    )
+
+
+# ─── AI Usage Analytics ──────────────────────────────────────────────────────
+
+FEATURE_LABEL_MAP = {
+    "cv_extraction": "CV Upload & Extraction",
+    "cv_formatting": "AI Profile Formatter",
+    "ats_scoring": "ATS Compatibility Scorer",
+    "interview_prep": "AI Interview Question Generator",
+    "ai_improve": "AI Bullet Optimizer",
+}
+
+
+async def get_ai_usage_analytics(db: AsyncSession) -> AIUsageStats:
+    """Compute comprehensive AI usage analytics including total tokens, per-feature, per-user, and recent logs."""
+    from app.integrations.huggingface.client import get_hf_key_manager
+
+    km = get_hf_key_manager()
+    active_keys = km.active_key_count
+    total_keys = km.key_count
+
+    # 1. Total Aggregates
+    totals_query = select(
+        func.count(AIUsageLog.id).label("total_calls"),
+        func.coalesce(func.sum(AIUsageLog.input_tokens), 0).label("total_input"),
+        func.coalesce(func.sum(AIUsageLog.output_tokens), 0).label("total_output"),
+        func.coalesce(func.sum(AIUsageLog.total_tokens), 0).label("total_tokens"),
+        func.coalesce(func.avg(AIUsageLog.response_time_ms), 0).label("avg_latency"),
+    )
+    totals_res = (await db.execute(totals_query)).first()
+
+    total_calls = totals_res.total_calls if totals_res else 0
+    total_input = int(totals_res.total_input) if totals_res else 0
+    total_output = int(totals_res.total_output) if totals_res else 0
+    total_tokens = int(totals_res.total_tokens) if totals_res else 0
+    avg_latency = int(totals_res.avg_latency) if totals_res else 0
+
+    # 2. Feature Breakdown
+    feat_query = (
+        select(
+            AIUsageLog.feature,
+            func.count(AIUsageLog.id).label("call_count"),
+            func.coalesce(func.sum(AIUsageLog.total_tokens), 0).label("tokens"),
+            func.coalesce(func.sum(AIUsageLog.input_tokens), 0).label("in_tokens"),
+            func.coalesce(func.sum(AIUsageLog.output_tokens), 0).label("out_tokens"),
+            func.coalesce(func.avg(AIUsageLog.response_time_ms), 0).label("avg_time"),
+        )
+        .group_by(AIUsageLog.feature)
+        .order_by(func.sum(AIUsageLog.total_tokens).desc())
+    )
+    feat_res = (await db.execute(feat_query)).all()
+    feature_breakdown = [
+        AIFeatureUsageBreakdown(
+            feature=r.feature,
+            feature_name=FEATURE_LABEL_MAP.get(r.feature, r.feature.replace("_", " ").title()),
+            total_calls=r.call_count,
+            total_tokens=int(r.tokens),
+            input_tokens=int(r.in_tokens),
+            output_tokens=int(r.out_tokens),
+            avg_response_time_ms=int(r.avg_time),
+        )
+        for r in feat_res
+    ]
+
+    # 3. Top Users by Token Usage
+    user_usage_query = (
+        select(
+            AIUsageLog.user_id,
+            User.full_name,
+            User.email,
+            func.count(AIUsageLog.id).label("call_count"),
+            func.coalesce(func.sum(AIUsageLog.total_tokens), 0).label("tokens"),
+            func.max(AIUsageLog.created_at).label("last_used"),
+        )
+        .outerjoin(User, AIUsageLog.user_id == User.id)
+        .group_by(AIUsageLog.user_id, User.full_name, User.email)
+        .order_by(func.sum(AIUsageLog.total_tokens).desc())
+        .limit(10)
+    )
+    user_usage_res = (await db.execute(user_usage_query)).all()
+    top_users = [
+        AIUserUsageStat(
+            user_id=r.user_id or "anonymous",
+            full_name=r.full_name or "Guest / System",
+            email=r.email or "guest@prepcv.com",
+            total_calls=r.call_count,
+            total_tokens=int(r.tokens),
+            last_used_at=r.last_used,
+        )
+        for r in user_usage_res
+    ]
+
+    # 4. Model Breakdown
+    model_query = (
+        select(
+            AIUsageLog.model,
+            func.count(AIUsageLog.id).label("call_count"),
+            func.coalesce(func.sum(AIUsageLog.total_tokens), 0).label("tokens"),
+        )
+        .group_by(AIUsageLog.model)
+        .order_by(func.sum(AIUsageLog.total_tokens).desc())
+    )
+    model_res = (await db.execute(model_query)).all()
+    model_breakdown = [
+        AIModelUsageStat(
+            model=r.model or "Qwen2.5-Coder-32B",
+            total_calls=r.call_count,
+            total_tokens=int(r.tokens),
+        )
+        for r in model_res
+    ]
+
+    # 5. Recent Logs (Last 25 entries joined with User)
+    recent_logs_query = (
+        select(
+            AIUsageLog.id,
+            AIUsageLog.user_id,
+            User.full_name.label("user_name"),
+            User.email.label("user_email"),
+            AIUsageLog.feature,
+            AIUsageLog.model,
+            AIUsageLog.input_tokens,
+            AIUsageLog.output_tokens,
+            AIUsageLog.total_tokens,
+            AIUsageLog.response_time_ms,
+            AIUsageLog.status,
+            AIUsageLog.api_key_hint,
+            AIUsageLog.error_message,
+            AIUsageLog.created_at,
+        )
+        .outerjoin(User, AIUsageLog.user_id == User.id)
+        .order_by(AIUsageLog.created_at.desc())
+        .limit(25)
+    )
+    recent_logs_res = (await db.execute(recent_logs_query)).all()
+    recent_logs = [
+        AIUsageLogEntry(
+            id=r.id,
+            user_id=r.user_id,
+            user_name=r.user_name or "Guest / System",
+            user_email=r.user_email or "guest@prepcv.com",
+            feature=FEATURE_LABEL_MAP.get(r.feature, r.feature),
+            model=r.model,
+            input_tokens=r.input_tokens,
+            output_tokens=r.output_tokens,
+            total_tokens=r.total_tokens,
+            response_time_ms=r.response_time_ms,
+            status=r.status,
+            api_key_hint=r.api_key_hint,
+            error_message=r.error_message,
+            created_at=r.created_at,
+        )
+        for r in recent_logs_res
+    ]
+
+    return AIUsageStats(
+        total_calls=total_calls,
+        total_input_tokens=total_input,
+        total_output_tokens=total_output,
+        total_tokens=total_tokens,
+        avg_response_time_ms=avg_latency,
+        active_keys_count=active_keys,
+        total_keys_count=total_keys,
+        feature_breakdown=feature_breakdown,
+        top_users=top_users,
+        model_breakdown=model_breakdown,
+        recent_logs=recent_logs,
     )
 
 

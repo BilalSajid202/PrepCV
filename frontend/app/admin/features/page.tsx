@@ -10,6 +10,17 @@ import {
   fetchAdminUsers,
   FeatureResponse,
 } from "@/lib/api";
+import {
+  Plus,
+  Trash2,
+  Edit3,
+  Sliders,
+  Check,
+  X,
+  ToggleLeft,
+  ToggleRight,
+  Sparkles,
+} from "lucide-react";
 
 export default function AdminFeaturesPage() {
   const [features, setFeatures] = useState<FeatureResponse[]>([]);
@@ -171,9 +182,10 @@ export default function AdminFeaturesPage() {
           {successMsg && (
             <div style={{
               backgroundColor: "#DCFCE7", border: "1px solid #86EFAC",
-              color: "#15803D", padding: "6px 14px", borderRadius: "8px", fontSize: "12.5px", fontWeight: 600
+              color: "#15803D", padding: "6px 14px", borderRadius: "8px", fontSize: "12.5px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px"
             }}>
-              ✓ {successMsg}
+              <Check size={14} />
+              <span>{successMsg}</span>
             </div>
           )}
 
@@ -194,7 +206,8 @@ export default function AdminFeaturesPage() {
               boxShadow: "0 1px 2px rgba(37, 99, 235, 0.2)",
             }}
           >
-            + Add New Feature
+            <Plus size={16} />
+            <span>Add New Feature</span>
           </button>
         </div>
       </div>
@@ -306,10 +319,10 @@ export default function AdminFeaturesPage() {
                     style={{
                       backgroundColor: "#FFFFFF", border: "1px solid #CBD5E1",
                       borderRadius: "6px", padding: "7px 10px", fontSize: "11.5px",
-                      color: "#DC2626", cursor: "pointer"
+                      color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center"
                     }}
                   >
-                    🗑️
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -322,11 +335,11 @@ export default function AdminFeaturesPage() {
       {showCreateModal && (
         <div style={{
           position: "fixed", inset: 0, backgroundColor: "rgba(15, 23, 42, 0.5)",
-          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px"
         }}>
-          <div style={{
+          <div className="responsive-modal-card" style={{
             backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0",
-            borderRadius: "14px", padding: "28px", maxWidth: "480px", width: "90%", color: "#0F172A",
+            borderRadius: "14px", color: "#0F172A",
             boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
           }}>
             <h2 style={{ fontSize: "18px", fontWeight: 800, margin: "0 0 16px 0", color: "#0F172A" }}>Register New Feature</h2>
@@ -381,7 +394,7 @@ export default function AdminFeaturesPage() {
                 />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
@@ -413,11 +426,11 @@ export default function AdminFeaturesPage() {
       {editingFeature && (
         <div style={{
           position: "fixed", inset: 0, backgroundColor: "rgba(15, 23, 42, 0.5)",
-          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px"
         }}>
-          <div style={{
+          <div className="responsive-modal-card" style={{
             backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0",
-            borderRadius: "14px", padding: "28px", maxWidth: "480px", width: "90%", color: "#0F172A",
+            borderRadius: "14px", color: "#0F172A",
             boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
           }}>
             <h2 style={{ fontSize: "18px", fontWeight: 800, margin: "0 0 16px 0", color: "#0F172A" }}>Edit Feature: {editingFeature.key}</h2>
@@ -465,7 +478,7 @@ export default function AdminFeaturesPage() {
                 </label>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
                 <button
                   type="button"
                   onClick={() => setEditingFeature(null)}
@@ -497,11 +510,11 @@ export default function AdminFeaturesPage() {
       {bulkFeature && (
         <div style={{
           position: "fixed", inset: 0, backgroundColor: "rgba(15, 23, 42, 0.5)",
-          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px"
         }}>
-          <div style={{
+          <div className="responsive-modal-card" style={{
             backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0",
-            borderRadius: "14px", padding: "28px", maxWidth: "480px", width: "90%", color: "#0F172A",
+            borderRadius: "14px", color: "#0F172A",
             boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
           }}>
             <h2 style={{ fontSize: "18px", fontWeight: 800, margin: "0 0 8px 0", color: "#0F172A" }}>
@@ -551,7 +564,7 @@ export default function AdminFeaturesPage() {
               </label>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", flexWrap: "wrap" }}>
               <button
                 type="button"
                 onClick={() => setBulkFeature(null)}

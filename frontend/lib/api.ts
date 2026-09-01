@@ -119,6 +119,7 @@ export interface ATSRecommendation {
   action_type: string;
   target_text?: string;
   category?: string;
+  impact?: string;
 }
 
 export interface ScoreBreakdown {
@@ -517,6 +518,62 @@ export interface RecentUserAdmin {
   created_at: string;
 }
 
+export interface AIUsageLogEntry {
+  id: string;
+  user_id?: string | null;
+  user_name?: string | null;
+  user_email?: string | null;
+  feature: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  response_time_ms: number;
+  status: string;
+  api_key_hint: string;
+  error_message?: string | null;
+  created_at: string;
+}
+
+export interface AIFeatureUsageBreakdown {
+  feature: string;
+  feature_name: string;
+  total_calls: number;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  avg_response_time_ms: number;
+}
+
+export interface AIUserUsageStat {
+  user_id: string;
+  full_name: string;
+  email: string;
+  total_calls: number;
+  total_tokens: number;
+  last_used_at?: string | null;
+}
+
+export interface AIModelUsageStat {
+  model: string;
+  total_calls: number;
+  total_tokens: number;
+}
+
+export interface AIUsageStats {
+  total_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_tokens: number;
+  avg_response_time_ms: number;
+  active_keys_count: number;
+  total_keys_count: number;
+  feature_breakdown: AIFeatureUsageBreakdown[];
+  top_users: AIUserUsageStat[];
+  model_breakdown: AIModelUsageStat[];
+  recent_logs: AIUsageLogEntry[];
+}
+
 export interface AdminDashboardStats {
   total_users: number;
   active_users: number;
@@ -528,6 +585,7 @@ export interface AdminDashboardStats {
   total_features: number;
   feature_usage: FeatureUsageStat[];
   recent_users: RecentUserAdmin[];
+  ai_usage?: AIUsageStats;
 }
 
 export interface UserFeatureInfo {
@@ -577,6 +635,10 @@ export interface FeatureResponse {
 
 export async function fetchAdminDashboard(): Promise<AdminDashboardStats> {
   return apiRequest<AdminDashboardStats>("/api/admin/dashboard");
+}
+
+export async function fetchAdminAIUsage(): Promise<AIUsageStats> {
+  return apiRequest<AIUsageStats>("/api/admin/ai-usage");
 }
 
 // ─── Admin User Management ──────────────────────────────────────────────────

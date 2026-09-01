@@ -260,7 +260,7 @@ def _deterministic_ats_analysis(job_description: str, resume_content: Dict[str, 
     }
 
 
-async def score_resume_against_jd(job_description: str, resume_content: Dict[str, Any]) -> Dict[str, Any]:
+async def score_resume_against_jd(job_description: str, resume_content: Dict[str, Any], user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Score resume against target job description using Hugging Face Qwen AI with fallback to deterministic NLP scoring.
     Complies with FR-8, FR-9, and NFR-10.
@@ -341,13 +341,31 @@ CRITICAL RULES:
             "explicit_skills": resume_content.get("skills") or []
         })
 
-        raw_response = await _call_hf_json_api(
+        from app.integrations.huggingface.client import log_ai_usage
+
+        api_result = await _call_hf_json_api(
             system_instruction=system_instruction,
             user_payload=user_payload,
             retry_count=1,
         )
 
-        if raw_response:
+        if api_result:
+            raw_response = api_result["content"]
+            usage = api_result.get("usage", {})
+
+            # Log AI token usage
+            await log_ai_usage(
+                user_id=user_id,
+                feature="ats_scoring",
+                model=api_result.get("model", ""),
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+                total_tokens=usage.get("total_tokens", 0),
+                response_time_ms=api_result.get("response_time_ms", 0),
+                status="success",
+                api_key_hint=api_result.get("api_key_hint", ""),
+            )
+
             clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
             json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
             if json_match:

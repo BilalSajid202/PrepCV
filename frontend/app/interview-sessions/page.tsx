@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/protected-route";
 import SidebarLayout from "@/components/sidebar-layout";
 import { InterviewSession, listInterviewSessions } from "@/lib/api";
+import {
+  ListChecks,
+  Plus,
+  MessageSquare,
+  ArrowRight,
+  Lightbulb,
+  Bot,
+  FileQuestion,
+} from "lucide-react";
 
 export default function InterviewSessionsPage() {
   const router = useRouter();
@@ -37,8 +46,9 @@ export default function InterviewSessionsPage() {
           
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
             <div>
-              <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
-                📚 Interview Prep Sessions
+              <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: "8px" }}>
+                <ListChecks size={24} color="#2563EB" />
+                <span>Interview Prep Sessions</span>
               </h1>
               <p style={{ fontSize: "14px", color: "#64748B", margin: 0 }}>
                 Archive of your tailored interview question sets and company intelligence.
@@ -61,7 +71,8 @@ export default function InterviewSessionsPage() {
                 gap: "6px",
               }}
             >
-              <span>＋</span> New Prep Session
+              <Plus size={16} />
+              <span>New Prep Session</span>
             </button>
           </div>
 
@@ -71,7 +82,9 @@ export default function InterviewSessionsPage() {
             </div>
           ) : sessions.length === 0 ? (
             <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "48px 24px", textAlign: "center" }}>
-              <div style={{ fontSize: "36px", marginBottom: "12px" }}>💬</div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
+                <Bot size={40} color="#7C3AED" />
+              </div>
               <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
                 No Interview Prep Sessions Yet
               </h3>
@@ -80,13 +93,14 @@ export default function InterviewSessionsPage() {
               </p>
               <button
                 onClick={() => router.push("/interview-prep")}
-                style={{ backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", padding: "10px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+                style={{ backgroundColor: "#2563EB", color: "#FFFFFF", border: "none", padding: "10px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
               >
-                Start Your First Prep Session →
+                <span>Start Your First Prep Session</span>
+                <ArrowRight size={16} />
               </button>
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "20px" }}>
               
               {/* Sessions Sidebar List */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -142,9 +156,10 @@ export default function InterviewSessionsPage() {
 
                     <button
                       onClick={() => router.push(`/interview-feedback?company=${encodeURIComponent(selectedSession.company_name)}&role=${encodeURIComponent(selectedSession.job_title)}&sessionId=${encodeURIComponent(selectedSession.id)}`)}
-                      style={{ padding: "7px 14px", backgroundColor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}
+                      style={{ padding: "7px 14px", backgroundColor: "#F5F3FF", color: "#7C3AED", border: "1px solid #DDD6FE", borderRadius: "6px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
                     >
-                      💡 Log Real Feedback
+                      <Lightbulb size={14} />
+                      <span>Log Real Feedback</span>
                     </button>
                   </div>
 

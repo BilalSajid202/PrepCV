@@ -201,10 +201,19 @@ async def _call_hf_json_api(
     model_name: Optional[str] = None,
     api_key: Optional[str] = None,
     retry_count: int = 1,
-) -> Optional[str]:
+    max_tokens: int = 4096,
+) -> Optional[Dict[str, Any]]:
     """
     Call Hugging Face Router chat completions API forcing JSON output.
     Uses rotating API keys with automatic failover when a key hits rate limits or quota tiers.
+
+    Returns a dict with:
+      - "content": the raw text response
+      - "usage": {"prompt_tokens": int, "completion_tokens": int, "total_tokens": int}
+      - "model": the model name used
+      - "api_key_hint": masked key string
+      - "response_time_ms": int
+    Or None if all attempts fail.
     """
     settings = get_settings()
     model = model_name or settings.hf_model or DEFAULT_HF_MODEL
@@ -223,7 +232,7 @@ async def _call_hf_json_api(
         "model": model,
         "messages": messages,
         "temperature": 0.2,
-        "max_tokens": 4096,
+        "max_tokens": max_tokens,
     }
 
     total_keys = km.key_count
@@ -241,41 +250,65 @@ async def _call_hf_json_api(
             "Content-Type": "application/json"
         }
 
+        call_start = time.time()
         try:
             async with httpx.AsyncClient(timeout=35.0) as client:
                 resp = await client.post(api_url, headers=headers, json=payload)
 
-                # Handle rate limiting or quota exhaustion (429, 402, or specific error messages)
-                if resp.status_code in (429, 402, 403, 401):
-                    logger.warning(
-                        f"HF key [{key_mask}] returned status {resp.status_code}: {resp.text[:200]}. Rotating key..."
-                    )
-                    km.report_rate_limit(key, cooldown_seconds=90)
-                    if api_key:  # If caller passed explicit static key, don't loop indefinitely
-                        return None
-                    continue
+            response_time_ms = int((time.time() - call_start) * 1000)
 
-                if resp.status_code != 200:
-                    logger.warning(
-                        f"HF API ({model}) returned status {resp.status_code} on key [{key_mask}]: {resp.text[:300]}"
-                    )
-                    # If provider doesn't support model or bad request, rotate key or retry
-                    if "rate" in resp.text.lower() or "quota" in resp.text.lower() or "limit" in resp.text.lower():
-                        km.report_rate_limit(key, cooldown_seconds=60)
-                    continue
-
-                data = resp.json()
-                choices = data.get("choices", [])
-                if not choices:
-                    logger.warning(f"HF API ({model}) returned no choices on key [{key_mask}].")
-                    continue
-
-                raw_text = choices[0].get("message", {}).get("content", "")
-                km.report_success(key)
-                logger.info(
-                    f"HF ({model}) response received via [{key_mask}] ({len(raw_text)} chars): {raw_text[:200]}..."
+            # Handle rate limiting or quota exhaustion (429, 402, or specific error messages)
+            if resp.status_code in (429, 402, 403, 401):
+                logger.warning(
+                    f"HF key [{key_mask}] returned status {resp.status_code}: {resp.text[:200]}. Rotating key..."
                 )
-                return raw_text
+                km.report_rate_limit(key, cooldown_seconds=90)
+                if api_key:  # If caller passed explicit static key, don't loop indefinitely
+                    return None
+                continue
+
+            if resp.status_code != 200:
+                logger.warning(
+                    f"HF API ({model}) returned status {resp.status_code} on key [{key_mask}]: {resp.text[:300]}"
+                )
+                # If provider doesn't support model or bad request, rotate key or retry
+                if "rate" in resp.text.lower() or "quota" in resp.text.lower() or "limit" in resp.text.lower():
+                    km.report_rate_limit(key, cooldown_seconds=60)
+                continue
+
+            data = resp.json()
+            choices = data.get("choices", [])
+            if not choices:
+                logger.warning(f"HF API ({model}) returned no choices on key [{key_mask}].")
+                continue
+
+            raw_text = choices[0].get("message", {}).get("content", "")
+            km.report_success(key)
+
+            # Extract token usage from the API response
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
+
+            logger.info(
+                f"HF ({model}) response via [{key_mask}] | "
+                f"{len(raw_text)} chars | "
+                f"tokens: {prompt_tokens}in/{completion_tokens}out/{total_tokens}total | "
+                f"{response_time_ms}ms"
+            )
+
+            return {
+                "content": raw_text,
+                "usage": {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                },
+                "model": model,
+                "api_key_hint": key_mask,
+                "response_time_ms": response_time_ms,
+            }
 
         except httpx.TimeoutException:
             logger.warning(f"HF API timeout on key [{key_mask}]. Rotating key...")
@@ -287,9 +320,52 @@ async def _call_hf_json_api(
     return None
 
 
+async def log_ai_usage(
+    user_id: Optional[str],
+    feature: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens: int,
+    response_time_ms: int,
+    status: str = "success",
+    api_key_hint: str = "",
+    error_message: Optional[str] = None,
+) -> None:
+    """Persist an AI usage log record to the database."""
+    try:
+        from app.database.session import get_session_factory
+        from app.database.models import AIUsageLog
+
+        factory = get_session_factory()
+        async with factory() as session:
+            log_entry = AIUsageLog(
+                user_id=user_id,
+                feature=feature,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+                response_time_ms=response_time_ms,
+                status=status,
+                api_key_hint=api_key_hint,
+                error_message=error_message,
+            )
+            session.add(log_entry)
+            await session.commit()
+            logger.debug(
+                f"AI usage logged: user={user_id}, feature={feature}, "
+                f"tokens={total_tokens}, status={status}, {response_time_ms}ms"
+            )
+    except Exception as e:
+        # Never let logging failures break the main flow
+        logger.error(f"Failed to log AI usage: {e}")
+
+
 async def format_cv_with_hf(
     raw_profile: Dict[str, Any],
     job_title: str,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Format and enhance CV / profile data using Hugging Face Qwen 30B-class model.
@@ -402,13 +478,29 @@ Return ONLY valid JSON matching this schema:
 
     user_payload = f"Candidate Profile Data:\n{json.dumps(clean_profile, indent=2)}"
 
-    raw_response = await _call_hf_json_api(
+    api_result = await _call_hf_json_api(
         system_instruction=system_instruction,
         user_payload=user_payload,
         retry_count=1,
     )
 
-    if raw_response:
+    if api_result:
+        raw_response = api_result["content"]
+        usage = api_result.get("usage", {})
+
+        # Log usage
+        await log_ai_usage(
+            user_id=user_id,
+            feature="cv_formatting",
+            model=api_result.get("model", ""),
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
+            response_time_ms=api_result.get("response_time_ms", 0),
+            status="success",
+            api_key_hint=api_result.get("api_key_hint", ""),
+        )
+
         try:
             # Strip markdown code fences if any
             clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
@@ -430,7 +522,7 @@ Return ONLY valid JSON matching this schema:
     return clean_profile
 
 
-async def improve_bullet_with_hf(section: str, original_text: str, instruction: str) -> Dict[str, str]:
+async def improve_bullet_with_hf(section: str, original_text: str, instruction: str, user_id: Optional[str] = None) -> Dict[str, str]:
     """Improve specific section text or bullet point using Hugging Face Qwen with input sanitization."""
     km = get_hf_key_manager()
 
@@ -464,13 +556,29 @@ Return ONLY a JSON object with keys:
         "instruction": clean_inst,
     })
 
-    raw_response = await _call_hf_json_api(
+    api_result = await _call_hf_json_api(
         system_instruction=system_instruction,
         user_payload=user_payload,
         retry_count=1,
     )
 
-    if raw_response:
+    if api_result:
+        raw_response = api_result["content"]
+        usage = api_result.get("usage", {})
+
+        # Log usage
+        await log_ai_usage(
+            user_id=user_id,
+            feature="ai_improve",
+            model=api_result.get("model", ""),
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
+            response_time_ms=api_result.get("response_time_ms", 0),
+            status="success",
+            api_key_hint=api_result.get("api_key_hint", ""),
+        )
+
         try:
             clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
             json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
@@ -491,3 +599,199 @@ Return ONLY a JSON object with keys:
         "improved_text": f"Spearheaded and optimized: {clean_text}" if not clean_text.lower().startswith("spearheaded") else clean_text,
         "explanation": "Refined with action-oriented structure."
     }
+
+
+async def extract_cv_with_hf(
+    raw_text: str,
+    job_title: str = "",
+    user_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    AI-first CV extraction: send raw resume text directly to Hugging Face Qwen LLM
+    for structured data extraction. This is the primary extraction path — the raw text
+    is the ONLY input, so the AI must extract everything from scratch.
+
+    Returns a validated ProfileSchema-compatible dict, or None if all keys fail.
+    """
+    km = get_hf_key_manager()
+
+    if not km.has_keys():
+        logger.warning("No HF API keys configured — cannot perform AI CV extraction.")
+        return None
+
+    clean_job_title = _sanitize_job_title(job_title)
+    # Send up to 12000 chars of raw text to cover multi-page CVs
+    clean_text = _sanitize_string(raw_text, 12000)
+
+    if not clean_text or len(clean_text) < 20:
+        logger.warning("Raw text too short for AI extraction.")
+        return None
+
+    system_instruction = f"""You are an expert CV/Resume parser. Your task is to extract ALL structured information from raw resume text into a precise JSON object.
+
+The raw text below was extracted from a PDF or Word document. It may contain layout artifacts such as:
+- Pipe characters (|) from table rows
+- Extra whitespace from multi-column layouts
+- Section headings in UPPERCASE or with underlines
+- Bullet characters (-, *, •)
+- Dates in various formats (e.g., "Dec 2024 – Present", "06/2020", "2021 -- 2023")
+
+EXTRACTION RULES:
+
+1. PERSONAL INFORMATION:
+   - Extract the candidate's FULL NAME (usually the largest/first text on the resume).
+   - Extract their professional title/headline (e.g., "Software Engineer • AI / Machine Learning Developer • Jr. Lecturer").
+   - Extract email, phone number, and location (city, country).
+   - Extract LinkedIn URL, GitHub URL, and portfolio/website URL if present.
+   - For "summary": Extract the PROFESSIONAL SUMMARY paragraph from the resume. This is typically a 2-4 sentence paragraph describing the candidate's background. Do NOT put contact info here.
+
+2. WORK EXPERIENCE - CRITICAL:
+   - Extract EVERY individual work experience entry separately. Each entry MUST have:
+     * "company": The actual company/organization name (e.g., "OmniClouds", "Superior University", "Google")
+     * "position": The actual job title (e.g., "Artificial Intelligence Developer", "Junior Lecturer", "Machine Learning Engineer")
+     * "location": Job location if mentioned (e.g., "Remote", "Lahore, Pakistan")
+     * "employment_type": "Full-time", "Part-time", "Contract", "Contractual", "Remote", "Internship" — infer from context
+     * "start_date": Actual start date (normalize to format like "Dec 2024", "Nov 2023", "Apr 2023")
+     * "end_date": Actual end date or "Present" if current
+     * "is_current": true if the role is ongoing (end date is "Present" or "Current")
+     * "description": Brief role description if available, otherwise empty string
+     * "achievements": Array of bullet points describing what the candidate did in this role. Extract the ACTUAL bullet points from the resume text.
+   - NEVER merge multiple jobs into one entry. NEVER use placeholder text like "Key Contributor" or "Professional Experience" as company/position names.
+   - If the resume has 4 jobs, you must return 4 experience entries.
+
+3. EDUCATION:
+   - Extract EVERY education entry with real institution names, degrees, fields of study, dates, and GPA if mentioned.
+   - Example: institution="Superior University", degree="Bachelor of Science", field_of_study="Software Engineering", gpa="3.68"
+
+4. SKILLS:
+   - Extract ALL skills mentioned anywhere in the resume — from dedicated skills sections, experience bullets, project descriptions, etc.
+   - Include programming languages, frameworks, tools, databases, platforms, methodologies, and soft skills.
+   - Return as a flat array of strings. Deduplicate.
+
+5. PROJECTS:
+   - Extract any projects mentioned with name, description, technologies used, URLs, and key achievements.
+
+6. CERTIFICATIONS:
+   - Extract any certifications, courses, or credentials with name, issuing organization, and dates.
+
+Target Role Context: "{clean_job_title}"
+If relevant, tailor the professional summary for this role, but NEVER invent fake information.
+
+Return ONLY valid JSON matching this exact schema:
+{{
+  "personal_info": {{
+    "full_name": "string",
+    "professional_title": "string",
+    "email": "string",
+    "phone": "string",
+    "location": "string",
+    "linkedin_url": "string",
+    "github_url": "string",
+    "portfolio_url": "string",
+    "summary": "string"
+  }},
+  "experience": [
+    {{
+      "company": "string",
+      "position": "string",
+      "location": "string",
+      "employment_type": "string",
+      "start_date": "string",
+      "end_date": "string",
+      "is_current": false,
+      "description": "string",
+      "achievements": ["string"]
+    }}
+  ],
+  "education": [
+    {{
+      "institution": "string",
+      "degree": "string",
+      "field_of_study": "string",
+      "start_date": "string",
+      "end_date": "string",
+      "is_current": false,
+      "gpa": "string",
+      "description": "string"
+    }}
+  ],
+  "skills": ["string"],
+  "projects": [
+    {{
+      "name": "string",
+      "description": "string",
+      "technologies": ["string"],
+      "project_url": "string",
+      "github_url": "string",
+      "achievements": ["string"]
+    }}
+  ],
+  "certifications": [
+    {{
+      "name": "string",
+      "issuing_organization": "string",
+      "issue_date": "string",
+      "expiration_date": "string",
+      "credential_id": "string",
+      "credential_url": "string"
+    }}
+  ]
+}}"""
+
+    user_payload = f"RAW RESUME TEXT TO EXTRACT FROM:\n\n{clean_text}"
+
+    api_result = await _call_hf_json_api(
+        system_instruction=system_instruction,
+        user_payload=user_payload,
+        retry_count=2,
+        max_tokens=6000,
+    )
+
+    if api_result:
+        raw_response = api_result["content"]
+        usage = api_result.get("usage", {})
+
+        # Log AI token usage
+        await log_ai_usage(
+            user_id=user_id,
+            feature="cv_extraction",
+            model=api_result.get("model", ""),
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            total_tokens=usage.get("total_tokens", 0),
+            response_time_ms=api_result.get("response_time_ms", 0),
+            status="success",
+            api_key_hint=api_result.get("api_key_hint", ""),
+        )
+
+        try:
+            # Strip markdown code fences if any
+            clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
+            # Find outermost JSON object
+            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
+            if json_match:
+                clean_json_str = json_match.group(0)
+
+            parsed = json.loads(clean_json_str)
+            validated_schema = ProfileSchema.model_validate(parsed)
+            result = validated_schema.model_dump()
+
+            # Validate that AI actually extracted real data (not placeholders)
+            exp_list = result.get("experience", [])
+            if exp_list:
+                first_exp = exp_list[0]
+                # Check for known placeholder values that would indicate a bad extraction
+                placeholder_companies = {"professional experience", "key contributor", "company", "organization"}
+                if first_exp.get("company", "").lower().strip() in placeholder_companies:
+                    logger.warning("AI extraction returned placeholder company names — treating as failed extraction.")
+                    return None
+
+            logger.info(
+                f"Successfully extracted CV with AI: {len(result.get('experience', []))} experiences, "
+                f"{len(result.get('education', []))} education, {len(result.get('skills', []))} skills."
+            )
+            return result
+        except Exception as err:
+            logger.error(f"Failed to parse/validate AI CV extraction response: {err}. Raw: {raw_response[:500]}")
+
+    return None

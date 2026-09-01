@@ -8,6 +8,17 @@ import {
   updateUserStatus,
   UserAdminResponse,
 } from "@/lib/api";
+import {
+  Search,
+  X,
+  Shield,
+  ShieldAlert,
+  UserCheck,
+  UserX,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+} from "lucide-react";
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -99,24 +110,28 @@ export default function AdminUsersPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSearchSubmit} style={{ display: "flex", gap: "8px" }}>
-          <input
-            type="text"
-            placeholder="Search by candidate name or email..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            style={{
-              backgroundColor: "#FFFFFF",
-              border: "1px solid #CBD5E1",
-              borderRadius: "8px",
-              padding: "9px 14px",
-              color: "#0F172A",
-              fontSize: "13.5px",
-              width: "280px",
-              outline: "none",
-              boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-            }}
-          />
+        <form onSubmit={handleSearchSubmit} style={{ display: "flex", gap: "8px", flexWrap: "wrap", width: "100%", maxWidth: "420px" }}>
+          <div style={{ position: "relative", flex: "1 1 200px", minWidth: "180px" }}>
+            <Search size={16} color="#94A3B8" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)" }} />
+            <input
+              type="text"
+              placeholder="Search candidate name or email..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              style={{
+                backgroundColor: "#FFFFFF",
+                border: "1px solid #CBD5E1",
+                borderRadius: "8px",
+                padding: "9px 14px 9px 36px",
+                color: "#0F172A",
+                fontSize: "13.5px",
+                width: "100%",
+                boxSizing: "border-box",
+                outline: "none",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+              }}
+            />
+          </div>
           <button
             type="submit"
             style={{

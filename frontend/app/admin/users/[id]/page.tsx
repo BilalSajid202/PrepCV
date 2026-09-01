@@ -11,6 +11,19 @@ import {
   UserAdminResponse,
   FeatureResponse,
 } from "@/lib/api";
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Ban,
+  UserCheck,
+  UserX,
+  FileText,
+  MessageSquare,
+  ListChecks,
+  ShieldCheck,
+  ShieldAlert,
+} from "lucide-react";
 
 export default function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -112,9 +125,10 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         <p style={{ fontSize: "14px", margin: "0 0 16px 0" }}>{error || "User record not found"}</p>
         <button
           onClick={() => router.push("/admin/users")}
-          style={{ background: "#2563EB", color: "#FFFFFF", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}
+          style={{ background: "#2563EB", color: "#FFFFFF", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "6px" }}
         >
-          ← Back to Candidate List
+          <ArrowLeft size={14} />
+          <span>Back to Candidate List</span>
         </button>
       </div>
     );
@@ -135,15 +149,17 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
             fontSize: "13.5px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px"
           }}
         >
-          ← Back to Candidates
+          <ArrowLeft size={16} />
+          <span>Back to Candidates</span>
         </button>
 
         {successMsg && (
           <div style={{
             backgroundColor: "#DCFCE7", border: "1px solid #86EFAC",
-            color: "#15803D", padding: "6px 14px", borderRadius: "8px", fontSize: "12.5px", fontWeight: 600
+            color: "#15803D", padding: "6px 14px", borderRadius: "8px", fontSize: "12.5px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px"
           }}>
-            ✓ {successMsg}
+            <Check size={14} />
+            <span>{successMsg}</span>
           </div>
         )}
       </div>
@@ -161,43 +177,45 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
         gap: "20px",
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
           <div style={{
-            width: "64px", height: "64px", borderRadius: "50%",
+            width: "56px", height: "56px", borderRadius: "50%",
             background: user.role === "admin" ? "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)" : "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
             color: "#FFFFFF", display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 800, fontSize: "24px"
+            fontWeight: 800, fontSize: "22px", flexShrink: 0,
           }}>
             {user.full_name ? user.full_name[0].toUpperCase() : "U"}
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-              <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+              <h1 style={{ fontSize: "20px", fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>
                 {user.full_name}
               </h1>
               <span style={{
-                fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "10px",
+                fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px",
                 backgroundColor: user.role === "admin" ? "#FEF3C7" : "#EFF6FF",
                 color: user.role === "admin" ? "#D97706" : "#2563EB",
+                display: "inline-flex", alignItems: "center", gap: "4px",
               }}>
-                {user.role.toUpperCase()}
+                {user.role === "admin" && <ShieldCheck size={11} />}
+                <span>{user.role.toUpperCase()}</span>
               </span>
               <span style={{
-                fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "10px",
+                fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px",
                 backgroundColor: user.is_active ? "#DCFCE7" : "#FEE2E2",
                 color: user.is_active ? "#15803D" : "#DC2626",
               }}>
                 {user.is_active ? "ACTIVE" : "SUSPENDED"}
               </span>
             </div>
-            <div style={{ fontSize: "13.5px", color: "#64748B" }}>
+            <div style={{ fontSize: "13px", color: "#64748B", wordBreak: "break-word" }}>
               {user.email} · Registered on {new Date(user.created_at).toLocaleDateString()}
             </div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             onClick={handleToggleRole}
             style={{
@@ -205,8 +223,8 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               border: "1px solid #CBD5E1",
               color: "#334155",
               borderRadius: "8px",
-              padding: "9px 16px",
-              fontSize: "13px",
+              padding: "8px 14px",
+              fontSize: "12.5px",
               fontWeight: 600,
               cursor: "pointer",
             }}
@@ -221,38 +239,51 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
               border: `1px solid ${user.is_active ? "#FCA5A5" : "#86EFAC"}`,
               color: user.is_active ? "#DC2626" : "#15803D",
               borderRadius: "8px",
-              padding: "9px 16px",
-              fontSize: "13px",
+              padding: "8px 14px",
+              fontSize: "12.5px",
               fontWeight: 600,
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
-            {user.is_active ? "🚫 Suspend Account" : "✓ Activate Account"}
+            {user.is_active ? <Ban size={14} /> : <CheckCircle2 size={14} />}
+            <span>{user.is_active ? "Suspend Account" : "Activate Account"}</span>
           </button>
         </div>
       </div>
 
       {/* Activity Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px" }}>
         <div style={{
           backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0",
           borderRadius: "14px", padding: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
         }}>
-          <div style={{ fontSize: "12.5px", color: "#64748B", fontWeight: 600, marginBottom: "4px" }}>Resumes Created</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: "#64748B", fontWeight: 600, marginBottom: "4px" }}>
+            <FileText size={15} color="#16A34A" />
+            <span>Resumes Created</span>
+          </div>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#16A34A", letterSpacing: "-0.02em" }}>{user.activity.resumes_count}</div>
         </div>
         <div style={{
           backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0",
           borderRadius: "14px", padding: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
         }}>
-          <div style={{ fontSize: "12.5px", color: "#64748B", fontWeight: 600, marginBottom: "4px" }}>Interview Sessions</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: "#64748B", fontWeight: 600, marginBottom: "4px" }}>
+            <ListChecks size={15} color="#2563EB" />
+            <span>Interview Sessions</span>
+          </div>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#2563EB", letterSpacing: "-0.02em" }}>{user.activity.interview_sessions_count}</div>
         </div>
         <div style={{
           backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0",
           borderRadius: "14px", padding: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
         }}>
-          <div style={{ fontSize: "12.5px", color: "#64748B", fontWeight: 600, marginBottom: "4px" }}>Feedbacks Shared</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: "#64748B", fontWeight: 600, marginBottom: "4px" }}>
+            <MessageSquare size={15} color="#7C3AED" />
+            <span>Feedbacks Shared</span>
+          </div>
           <div style={{ fontSize: "28px", fontWeight: 800, color: "#7C3AED", letterSpacing: "-0.02em" }}>{user.activity.interview_feedbacks_count}</div>
         </div>
       </div>

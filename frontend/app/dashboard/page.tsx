@@ -12,6 +12,16 @@ import {
   listUserResumes,
   listInterviewSessions,
 } from "@/lib/api";
+import {
+  FilePlus,
+  Bot,
+  Target,
+  ArrowRight,
+  FileText,
+  Sparkles,
+  Award,
+  Video,
+} from "lucide-react";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -84,8 +94,9 @@ export default function DashboardPage() {
           
           {/* Greeting Header */}
           <div style={{ marginBottom: "28px" }}>
-            <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
-              {getGreeting()}, {user?.full_name || "Muhammad"} 👋
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span>{getGreeting()}, {user?.full_name || "Candidate"}</span>
+              <Sparkles size={22} color="#7C3AED" />
             </h1>
             <p style={{ fontSize: "14.5px", color: "#64748B", margin: 0 }}>
               Let's get you ready for your next job.
@@ -93,24 +104,24 @@ export default function DashboardPage() {
           </div>
 
           {/* 2 Hero Stat Cards */}
-          <div style={{ display: "flex", gap: "20px", marginBottom: "32px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "16px", marginBottom: "32px", maxWidth: "460px" }}>
             
             {/* Card 1: ATS Score */}
             <div
               onClick={() => router.push("/ats-checker")}
               style={{
-                width: "200px",
                 backgroundColor: "#FFFFFF",
                 borderRadius: "12px",
                 border: "1px solid #E2E8F0",
-                padding: "20px 24px",
+                padding: "20px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 cursor: "pointer",
                 transition: "transform 0.15s ease",
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#64748B", marginBottom: "8px" }}>
-                ATS Score
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748B" }}>ATS Score</span>
+                <Target size={18} color={getScoreColor(highestAtsScore)} />
               </div>
               <div style={{ fontSize: "36px", fontWeight: 900, color: getScoreColor(highestAtsScore), lineHeight: 1.1 }}>
                 {highestAtsScore}%
@@ -124,18 +135,18 @@ export default function DashboardPage() {
             <div
               onClick={() => router.push("/interview-sessions")}
               style={{
-                width: "200px",
                 backgroundColor: "#FFFFFF",
                 borderRadius: "12px",
                 border: "1px solid #E2E8F0",
-                padding: "20px 24px",
+                padding: "20px",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                 cursor: "pointer",
                 transition: "transform 0.15s ease",
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#64748B", marginBottom: "8px" }}>
-                Interviews
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "#64748B" }}>Interviews</span>
+                <Bot size={18} color="#2563EB" />
               </div>
               <div style={{ fontSize: "36px", fontWeight: 900, color: "#2563EB", lineHeight: 1.1 }}>
                 {sessions.length || 4}
@@ -150,15 +161,17 @@ export default function DashboardPage() {
           {/* Recent Resumes Section */}
           <div style={{ marginBottom: "32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-              <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                Recent Resumes
+              <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+                <FileText size={18} color="#2563EB" />
+                <span>Recent Resumes</span>
               </h2>
               {resumes.length > 0 && (
                 <button
                   onClick={() => router.push("/profile")}
-                  style={{ background: "none", border: "none", color: "#2563EB", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                  style={{ background: "none", border: "none", color: "#2563EB", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
                 >
-                  View All ({resumes.length}) →
+                  <span>View All ({resumes.length})</span>
+                  <ArrowRight size={14} />
                 </button>
               )}
             </div>
@@ -214,7 +227,7 @@ export default function DashboardPage() {
                       }}>
                         {resume.ats_score ? `${resume.ats_score}%` : "87%"}
                       </span>
-                      <span style={{ fontSize: "16px", color: "#94A3B8" }}>→</span>
+                      <ArrowRight size={16} color="#94A3B8" />
                     </div>
                   </div>
                 ))
@@ -237,10 +250,11 @@ export default function DashboardPage() {
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "8px",
               }}
             >
-              <span>＋</span> Create New Resume
+              <FilePlus size={16} />
+              <span>Create New Resume</span>
             </button>
 
             <button
@@ -256,10 +270,11 @@ export default function DashboardPage() {
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "8px",
               }}
             >
-              <span>💬</span> Prepare for Interview
+              <Bot size={16} />
+              <span>Prepare for Interview</span>
             </button>
 
             <button
@@ -275,10 +290,11 @@ export default function DashboardPage() {
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "8px",
               }}
             >
-              <span>🎯</span> ATS Checker
+              <Target size={16} color="#2563EB" />
+              <span>ATS Checker</span>
             </button>
           </div>
 

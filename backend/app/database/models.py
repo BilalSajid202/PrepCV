@@ -33,6 +33,7 @@ class User(Base):
     interview_sessions: Mapped[list["InterviewSession"]] = relationship("InterviewSession", back_populates="user", cascade="all, delete-orphan")
     interview_feedbacks: Mapped[list["InterviewFeedback"]] = relationship("InterviewFeedback", back_populates="user", cascade="all, delete-orphan")
     user_features: Mapped[list["UserFeature"]] = relationship("UserFeature", back_populates="user", cascade="all, delete-orphan")
+    ai_usage_logs: Mapped[list["AIUsageLog"]] = relationship("AIUsageLog", back_populates="user", cascade="all, delete-orphan")
 
 
 class Profile(Base):
@@ -202,3 +203,28 @@ class UserFeature(Base):
 
     user: Mapped["User"] = relationship("User", back_populates="user_features")
     feature: Mapped["Feature"] = relationship("Feature", back_populates="user_features")
+
+
+class AIUsageLog(Base):
+    """Track every HuggingFace API call for analytics and cost monitoring."""
+    __tablename__ = "ai_usage_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+
+    feature: Mapped[str] = mapped_column(String(50), index=True, nullable=False, default="unknown")
+    model: Mapped[str] = mapped_column(String(150), nullable=False, default="")
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    response_time_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="success")
+    api_key_hint: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    user: Mapped["User | None"] = relationship("User", back_populates="ai_usage_logs")
+

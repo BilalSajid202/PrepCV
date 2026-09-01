@@ -16,6 +16,26 @@ import {
   formatProfileWithAI,
   generateResume,
 } from "@/lib/api";
+import {
+  Sparkles,
+  UploadCloud,
+  FileText,
+  Check,
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  X,
+  Paperclip,
+  Rocket,
+  Target,
+  ChevronRight,
+  ChevronLeft,
+  Trash2,
+  Plus,
+  ArrowLeft,
+  ArrowRight,
+  HelpCircle,
+} from "lucide-react";
 
 const SUGGESTED_SKILLS = [
   "Python", "FastAPI", "React", "TypeScript", "Next.js", "PostgreSQL",
@@ -493,33 +513,38 @@ export default function ProfilePage() {
         <header style={{
           backgroundColor: "#FFFFFF",
           borderBottom: "1px solid #E2E8F0",
-          padding: "16px 32px",
+          padding: "12px 16px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between"
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "10px",
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
         }}>
           <div
             onClick={() => router.push("/dashboard")}
-            style={{ fontSize: "22px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+            style={{ fontSize: "20px", fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
           >
             Prep<span style={{ color: "#2563EB" }}>CV</span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <button
               onClick={() => router.push("/dashboard")}
               style={{
                 backgroundColor: "#FFFFFF",
                 color: "#64748B",
                 border: "1px solid #CBD5E1",
-                padding: "8px 16px",
+                padding: "7px 12px",
                 borderRadius: "6px",
-                fontSize: "14px",
+                fontSize: "13px",
                 fontWeight: 500,
                 cursor: "pointer"
               }}
             >
-              ← Dashboard
+              ← <span className="hide-on-mobile">Dashboard</span>
             </button>
             <button
               onClick={() => handleSaveProfile(false)}
@@ -528,14 +553,14 @@ export default function ProfilePage() {
                 backgroundColor: "#2563EB",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "8px 18px",
+                padding: "7px 14px",
                 borderRadius: "6px",
-                fontSize: "14px",
+                fontSize: "13px",
                 fontWeight: 600,
                 cursor: "pointer"
               }}
             >
-              {saving ? "Saving..." : "Save Profile"}
+              {saving ? "Saving..." : "Save"}
             </button>
             <button
               onClick={triggerFormatModal}
@@ -544,22 +569,26 @@ export default function ProfilePage() {
                 background: formatting ? "#94A3B8" : "linear-gradient(135deg, #7C3AED, #2563EB)",
                 color: "#FFFFFF",
                 border: "none",
-                padding: "8px 18px",
+                padding: "7px 14px",
                 borderRadius: "6px",
-                fontSize: "14px",
+                fontSize: "13px",
                 fontWeight: 600,
                 cursor: formatting ? "not-allowed" : "pointer",
                 boxShadow: formatting ? "none" : "0 2px 8px rgba(124, 58, 237, 0.3)",
                 transition: "all 0.2s ease",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              {formatting ? "⏳ Formatting..." : "✨ Format with AI"}
+              <Sparkles size={14} />
+              <span>{formatting ? "Formatting..." : "AI Format"}</span>
             </button>
           </div>
         </header>
 
         {/* Wizard Main Container */}
-        <main style={{ maxWidth: "960px", margin: "32px auto", padding: "0 24px" }}>
+        <main style={{ maxWidth: "960px", margin: "20px auto", padding: "0 16px" }}>
           
           {/* Header Title & Stepper */}
           <div style={{ marginBottom: "28px", textAlign: "center" }}>
@@ -584,27 +613,30 @@ export default function ProfilePage() {
 
           {/* Messages */}
           {errorMsg && (
-            <div style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", padding: "12px 16px", borderRadius: "8px", fontSize: "14px", marginBottom: "20px" }}>
-              ⚠️ {errorMsg}
+            <div style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", padding: "12px 16px", borderRadius: "8px", fontSize: "14px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <AlertCircle size={16} />
+              <span>{errorMsg}</span>
             </div>
           )}
           {successMsg && (
-            <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", color: "#16A34A", padding: "12px 16px", borderRadius: "8px", fontSize: "14px", marginBottom: "20px" }}>
-              ✓ {successMsg}
+            <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", color: "#16A34A", padding: "12px 16px", borderRadius: "8px", fontSize: "14px", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Check size={16} />
+              <span>{successMsg}</span>
             </div>
           )}
 
           {/* Extracted Notice Banner */}
           {extractedNotice && (
-            <div style={{ backgroundColor: "#F0F9FF", border: "1px solid #BAE6FD", color: "#0369A1", padding: "14px 18px", borderRadius: "10px", fontSize: "14px", marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <strong>✨ Extracted data pre-filled!</strong> Please review and correct your information in the steps below before generating your resume.
+            <div style={{ backgroundColor: "#F0F9FF", border: "1px solid #BAE6FD", color: "#0369A1", padding: "14px 18px", borderRadius: "10px", fontSize: "14px", marginBottom: "24px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Sparkles size={16} color="#0284C7" style={{ flexShrink: 0 }} />
+                <span><strong>Extracted data pre-filled!</strong> Please review and correct your information in the steps below before generating your resume.</span>
               </div>
               <button
                 onClick={() => setExtractedNotice(false)}
-                style={{ background: "none", border: "none", color: "#0369A1", cursor: "pointer", fontWeight: 600 }}
+                style={{ background: "none", border: "none", color: "#0369A1", cursor: "pointer", fontWeight: 600, padding: "4px" }}
               >
-                Dismiss
+                <X size={16} />
               </button>
             </div>
           )}
@@ -659,7 +691,9 @@ export default function ProfilePage() {
                 padding: "28px",
                 textAlign: "center"
               }}>
-                <div style={{ fontSize: "36px", marginBottom: "8px" }}>📄</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px" }}>
+                  <UploadCloud size={38} color="#2563EB" />
+                </div>
                 <h3 style={{ fontSize: "18px", fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
                   Upload existing CV for Auto-Extraction
                 </h3>
@@ -686,9 +720,12 @@ export default function ProfilePage() {
                       fontSize: "14px",
                       fontWeight: 600,
                       cursor: "pointer",
-                      display: "inline-block"
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
                     }}>
-                      Browse & Upload CV (PDF / DOCX)
+                      <UploadCloud size={16} />
+                      <span>Browse & Upload CV (PDF / DOCX)</span>
                       <input
                         type="file"
                         accept=".pdf,.docx"
@@ -702,8 +739,9 @@ export default function ProfilePage() {
                       />
                     </label>
                     {uploadError && (
-                      <div style={{ color: "#DC2626", fontSize: "13px", marginTop: "12px", fontWeight: 500 }}>
-                        ⚠ {uploadError}
+                      <div style={{ color: "#DC2626", fontSize: "13px", marginTop: "12px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                        <AlertTriangle size={14} />
+                        <span>{uploadError}</span>
                       </div>
                     )}
                   </div>
@@ -722,7 +760,7 @@ export default function ProfilePage() {
                   Personal Information
                 </h2>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "16px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
                       Full Name *
@@ -909,7 +947,7 @@ export default function ProfilePage() {
                         </button>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "16px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>Job Title *</label>
                           <input
@@ -978,9 +1016,10 @@ export default function ProfilePage() {
                             />
                             <button
                               onClick={() => removeAchievementBullet(idx, bIdx)}
-                              style={{ backgroundColor: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", padding: "0 10px", borderRadius: "6px", cursor: "pointer" }}
+                              style={{ backgroundColor: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", padding: "0 10px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                              title="Remove bullet"
                             >
-                              ✕
+                              <X size={14} />
                             </button>
                           </div>
                         ))}
@@ -1044,7 +1083,7 @@ export default function ProfilePage() {
                         </button>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "16px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>Institution / University *</label>
                           <input type="text" value={edu.institution} onChange={(e) => updateEducationItem(idx, "institution", e.target.value)} placeholder="e.g. University of XYZ" style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "14px" }} />
@@ -1172,7 +1211,7 @@ export default function ProfilePage() {
                           Remove
                         </button>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "16px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>Project Name *</label>
                           <input type="text" value={proj.name} onChange={(e) => updateProjectItem(idx, "name", e.target.value)} placeholder="e.g. AI Resume Builder" style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "14px" }} />
@@ -1232,7 +1271,7 @@ export default function ProfilePage() {
                           Remove
                         </button>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "16px" }}>
                         <div>
                           <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>Certification Name *</label>
                           <input type="text" value={cert.name} onChange={(e) => updateCertificationItem(idx, "name", e.target.value)} placeholder="e.g. AWS Certified Cloud Practitioner" style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "14px" }} />
@@ -1269,29 +1308,35 @@ export default function ProfilePage() {
               </p>
 
               {/* Summary Checklist */}
-              <div style={{ maxWidth: "500px", margin: "0 auto 32px auto", textAlign: "left", backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "20px" }}>
-                <div style={{ fontSize: "14px", color: profile.personal_info.full_name ? "#16A34A" : "#DC2626", marginBottom: "8px", fontWeight: 600 }}>
-                  {profile.personal_info.full_name ? "✓" : "⚠"} Personal Info: {profile.personal_info.full_name || "Missing Name"} ({profile.personal_info.professional_title || "No Title"})
+              <div style={{ maxWidth: "500px", margin: "0 auto 32px auto", textAlign: "left", backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ fontSize: "14px", color: profile.personal_info.full_name ? "#16A34A" : "#DC2626", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                  {profile.personal_info.full_name ? <CheckCircle2 size={16} color="#16A34A" /> : <AlertTriangle size={16} color="#DC2626" />}
+                  <span>Personal Info: {profile.personal_info.full_name || "Missing Name"} ({profile.personal_info.professional_title || "No Title"})</span>
                 </div>
-                <div style={{ fontSize: "14px", color: profile.experience.length ? "#16A34A" : "#D97706", marginBottom: "8px", fontWeight: 600 }}>
-                  {profile.experience.length ? "✓" : "⚠"} Work Experience: {profile.experience.length} position(s) added
+                <div style={{ fontSize: "14px", color: profile.experience.length ? "#16A34A" : "#D97706", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                  {profile.experience.length ? <CheckCircle2 size={16} color="#16A34A" /> : <AlertTriangle size={16} color="#D97706" />}
+                  <span>Work Experience: {profile.experience.length} position(s) added</span>
                 </div>
-                <div style={{ fontSize: "14px", color: profile.education.length ? "#16A34A" : "#D97706", marginBottom: "8px", fontWeight: 600 }}>
-                  {profile.education.length ? "✓" : "⚠"} Education: {profile.education.length} degree(s) added
+                <div style={{ fontSize: "14px", color: profile.education.length ? "#16A34A" : "#D97706", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                  {profile.education.length ? <CheckCircle2 size={16} color="#16A34A" /> : <AlertTriangle size={16} color="#D97706" />}
+                  <span>Education: {profile.education.length} degree(s) added</span>
                 </div>
-                <div style={{ fontSize: "14px", color: profile.skills.length ? "#16A34A" : "#D97706", marginBottom: "8px", fontWeight: 600 }}>
-                  {profile.skills.length ? "✓" : "⚠"} Skills: {profile.skills.length} skill tag(s) highlighted
+                <div style={{ fontSize: "14px", color: profile.skills.length ? "#16A34A" : "#D97706", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px" }}>
+                  {profile.skills.length ? <CheckCircle2 size={16} color="#16A34A" /> : <AlertTriangle size={16} color="#D97706" />}
+                  <span>Skills: {profile.skills.length} skill tag(s) highlighted</span>
                 </div>
-                <div style={{ fontSize: "14px", color: profile.projects.length ? "#16A34A" : "#64748B", marginBottom: "8px" }}>
-                  {profile.projects.length ? "✓" : "○"} Projects: {profile.projects.length} project(s)
+                <div style={{ fontSize: "14px", color: profile.projects.length ? "#16A34A" : "#64748B", display: "flex", alignItems: "center", gap: "8px" }}>
+                  {profile.projects.length ? <CheckCircle2 size={16} color="#16A34A" /> : <HelpCircle size={16} color="#94A3B8" />}
+                  <span>Projects: {profile.projects.length} project(s)</span>
                 </div>
-                <div style={{ fontSize: "14px", color: profile.certifications.length ? "#16A34A" : "#64748B" }}>
-                  {profile.certifications.length ? "✓" : "○"} Certifications: {profile.certifications.length} certification(s)
+                <div style={{ fontSize: "14px", color: profile.certifications.length ? "#16A34A" : "#64748B", display: "flex", alignItems: "center", gap: "8px" }}>
+                  {profile.certifications.length ? <CheckCircle2 size={16} color="#16A34A" /> : <HelpCircle size={16} color="#94A3B8" />}
+                  <span>Certifications: {profile.certifications.length} certification(s)</span>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div style={{ display: "flex", justifyContent: "center", gap: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: "16px", flexWrap: "wrap" }}>
                 <button
                   onClick={() => setActiveStep(1)}
                   style={{
@@ -1302,10 +1347,14 @@ export default function ProfilePage() {
                     borderRadius: "8px",
                     fontSize: "15px",
                     fontWeight: 600,
-                    cursor: "pointer"
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
-                  Edit Profile Data
+                  <ArrowLeft size={16} />
+                  <span>Edit Profile Data</span>
                 </button>
                 <button
                   onClick={handleGenerateResume}
@@ -1319,10 +1368,14 @@ export default function ProfilePage() {
                     fontSize: "15px",
                     fontWeight: 700,
                     cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(124, 58, 237, 0.25)"
+                    boxShadow: "0 4px 12px rgba(124, 58, 237, 0.25)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "8px",
                   }}
                 >
-                  {generating ? "✨ Generating ATS Resume (<15s)..." : "✨ Generate Resume"}
+                  <Sparkles size={16} />
+                  <span>{generating ? "Generating ATS Resume (<15s)..." : "Generate Resume"}</span>
                 </button>
               </div>
             </div>
@@ -1353,19 +1406,20 @@ export default function ProfilePage() {
           >
             <div
               onClick={(e) => e.stopPropagation()}
+              className="responsive-modal-card"
               style={{
                 backgroundColor: "#FFFFFF",
                 borderRadius: "16px",
-                padding: "36px 32px",
-                maxWidth: "480px",
-                width: "90%",
+                padding: "28px 24px",
                 boxShadow: "0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(37, 99, 235, 0.1)",
                 animation: "modalSlideUp 0.25s ease",
               }}
             >
               {/* Modal Header */}
               <div style={{ textAlign: "center", marginBottom: "24px" }}>
-                <div style={{ fontSize: "40px", marginBottom: "12px" }}>🎯</div>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: "12px" }}>
+                  <Target size={36} color="#2563EB" />
+                </div>
                 <h3 style={{ fontSize: "20px", fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
                   What position are you targeting?
                 </h3>
@@ -1410,8 +1464,9 @@ export default function ProfilePage() {
                   onBlur={(e) => (e.target.style.borderColor = "#CBD5E1")}
                 />
                 {formatModalMode === "upload" && pendingFile && (
-                  <div style={{ fontSize: "12px", color: "#64748B", marginTop: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                    📎 {pendingFile.name} ({(pendingFile.size / 1024).toFixed(1)} KB)
+                  <div style={{ fontSize: "12px", color: "#64748B", marginTop: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Paperclip size={14} />
+                    <span>{pendingFile.name} ({(pendingFile.size / 1024).toFixed(1)} KB)</span>
                   </div>
                 )}
               </div>
@@ -1458,9 +1513,23 @@ export default function ProfilePage() {
                     cursor: "pointer",
                     transition: "background-color 0.2s ease",
                     boxShadow: "0 4px 12px rgba(37, 99, 235, 0.3)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
                   }}
                 >
-                  {formatModalMode === "format" ? "✨ Format Profile with AI" : "🚀 Process CV with AI"}
+                  {formatModalMode === "format" ? (
+                    <>
+                      <Sparkles size={16} />
+                      <span>Format Profile with AI</span>
+                    </>
+                  ) : (
+                    <>
+                      <Rocket size={16} />
+                      <span>Process CV with AI</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -9,6 +9,15 @@ import {
   submitInterviewFeedback,
   listUserFeedback,
 } from "@/lib/api";
+import {
+  MessageSquareQuote,
+  Sparkles,
+  ShieldCheck,
+  AlertCircle,
+  Check,
+  ArrowRight,
+  Send,
+} from "lucide-react";
 
 function InterviewFeedbackContent() {
   const router = useRouter();
@@ -87,8 +96,9 @@ function InterviewFeedbackContent() {
     <div style={{ maxWidth: "900px" }}>
       {/* Header */}
       <div style={{ marginBottom: "24px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
-          💡 Post-Interview Feedback Capture (RAG Loop)
+        <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: "8px" }}>
+          <MessageSquareQuote size={24} color="#7C3AED" />
+          <span>Post-Interview Feedback Capture (RAG Loop)</span>
         </h1>
         <p style={{ fontSize: "14px", color: "#64748B", margin: 0 }}>
           Report what interviewers actually asked. Your feedback is automatically anonymized and empowers future question generation.
@@ -96,34 +106,37 @@ function InterviewFeedbackContent() {
       </div>
 
       {errorMsg && (
-        <div style={{ backgroundColor: "#FEF2F2", color: "#DC2626", padding: "12px 16px", borderRadius: "8px", marginBottom: "20px", fontSize: "13.5px" }}>
-          ⚠️ {errorMsg}
+        <div style={{ backgroundColor: "#FEF2F2", color: "#DC2626", padding: "12px 16px", borderRadius: "8px", marginBottom: "20px", fontSize: "13.5px", display: "flex", alignItems: "center", gap: "8px" }}>
+          <AlertCircle size={16} />
+          <span>{errorMsg}</span>
         </div>
       )}
 
       {successMsg && (
-        <div style={{ backgroundColor: "#F0FDF4", color: "#16A34A", padding: "12px 16px", borderRadius: "8px", marginBottom: "20px", fontSize: "13.5px" }}>
-          ✓ {successMsg}
+        <div style={{ backgroundColor: "#F0FDF4", color: "#16A34A", padding: "12px 16px", borderRadius: "8px", marginBottom: "20px", fontSize: "13.5px", display: "flex", alignItems: "center", gap: "8px" }}>
+          <Check size={16} />
+          <span>{successMsg}</span>
         </div>
       )}
 
       {/* Form Card */}
       <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", marginBottom: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
           <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
             What questions were actually asked?
           </h2>
           <button
             type="button"
             onClick={handleFillSample}
-            style={{ background: "none", border: "none", color: "#7C3AED", fontSize: "13px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}
+            style={{ background: "none", border: "none", color: "#7C3AED", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
           >
-            ✨ Load Example Feedback
+            <Sparkles size={14} />
+            <span>Load Example Feedback</span>
           </button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "14px" }}>
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
                 Company Name
@@ -180,7 +193,7 @@ function InterviewFeedbackContent() {
 
           {/* Privacy & Anonymization Notice */}
           <div style={{ backgroundColor: "#F0FDF4", border: "1px solid #BBF7D0", padding: "12px 16px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "18px" }}>🛡️</span>
+            <ShieldCheck size={20} color="#15803D" style={{ flexShrink: 0 }} />
             <span style={{ fontSize: "12.5px", color: "#15803D", lineHeight: 1.4 }}>
               <strong>Privacy Guaranteed (NFR-5):</strong> All names, email addresses, phone numbers, and candidate contact links are automatically sanitized and stripped before cross-user RAG indexing.
             </span>
@@ -199,9 +212,13 @@ function InterviewFeedbackContent() {
                 fontSize: "14px",
                 fontWeight: 700,
                 cursor: submitting ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
               }}
             >
-              {submitting ? "Sanitizing & Saving..." : "Submit Anonymized Feedback →"}
+              <Send size={15} />
+              <span>{submitting ? "Sanitizing & Saving..." : "Submit Anonymized Feedback"}</span>
             </button>
           </div>
         </form>

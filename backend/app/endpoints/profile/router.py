@@ -151,7 +151,7 @@ async def upload_cv(
 
     try:
         logger.info(f"==> [CV Upload] Sending text to LLM parser for role: '{job_title}'...")
-        parsed_profile = await parse_cv_text_with_llm(raw_text, job_title=job_title)
+        parsed_profile = await parse_cv_text_with_llm(raw_text, job_title=job_title, user_id=current_user.id)
         logger.info(f"==> [CV Upload] Parsing completed. Found: {len(parsed_profile.get('experience', []))} roles, {len(parsed_profile.get('education', []))} education items, {len(parsed_profile.get('skills', []))} skills.")
     except Exception as e:
         logger.error(f"==> [CV Upload] LLM parsing error: {e}", exc_info=True)
@@ -205,7 +205,7 @@ async def format_profile_with_ai(
     raw_profile = req.profile.model_dump()
 
     # Send through Hugging Face Qwen with input sanitization and schema validation
-    formatted_profile = await format_cv_with_hf(raw_profile, req.job_title)
+    formatted_profile = await format_cv_with_hf(raw_profile, req.job_title, user_id=current_user.id)
 
     # Ensure user identity fields are preserved
     if "personal_info" in formatted_profile:
