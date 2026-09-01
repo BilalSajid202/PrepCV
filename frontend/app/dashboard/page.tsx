@@ -404,7 +404,7 @@ export default function DashboardPage() {
           {/* Action Buttons Row */}
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
             <button
-              onClick={() => router.push("/profile")}
+              onClick={() => router.push("/profile?new=true")}
               style={{
                 backgroundColor: "#2563EB",
                 color: "#FFFFFF",

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import ProtectedRoute from "@/components/protected-route";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -35,6 +35,7 @@ import {
   ArrowLeft,
   ArrowRight,
   HelpCircle,
+  RotateCcw,
 } from "lucide-react";
 
 const SUGGESTED_SKILLS = [
@@ -42,7 +43,7 @@ const SUGGESTED_SKILLS = [
   "RAG", "LLM", "PyTorch", "Docker", "AWS", "Git", "Machine Learning", "NLP"
 ];
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const { user, logout } = useAuth();
   const router = useRouter();
 
@@ -90,18 +91,65 @@ export default function ProfilePage() {
   // New skill input
   const [skillInput, setSkillInput] = useState<string>("");
 
-  // Load existing profile from backend on mount
+  const searchParams = useSearchParams();
+  const isNewResume = searchParams ? searchParams.get("new") === "true" : false;
+
+  const handleClearAll = () => {
+    setProfile({
+      personal_info: {
+        full_name: "",
+        professional_title: "",
+        email: "",
+        phone: "",
+        location: "",
+        linkedin_url: "",
+        github_url: "",
+        portfolio_url: "",
+        summary: "",
+      },
+      experience: [],
+      education: [],
+      skills: [],
+      projects: [],
+      certifications: [],
+    });
+    setSuccessMsg("All fields have been cleared. You can enter details or upload a new CV.");
+    setTimeout(() => setSuccessMsg(null), 3000);
+  };
+
+  // Load existing profile from backend on mount (unless ?new=true is passed)
   useEffect(() => {
     async function loadData() {
+      if (isNewResume) {
+        setProfile({
+          personal_info: {
+            full_name: "",
+            professional_title: "",
+            email: "",
+            phone: "",
+            location: "",
+            linkedin_url: "",
+            github_url: "",
+            portfolio_url: "",
+            summary: "",
+          },
+          experience: [],
+          education: [],
+          skills: [],
+          projects: [],
+          certifications: [],
+        });
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const data = await fetchProfile();
-        setProfile((prev) => ({
-          ...prev,
+        setProfile({
           personal_info: {
-            ...prev.personal_info,
-            full_name: data.personal_info?.full_name || user?.full_name || "",
-            email: data.personal_info?.email || user?.email || "",
+            full_name: data.personal_info?.full_name || "",
+            email: data.personal_info?.email || "",
             professional_title: data.personal_info?.professional_title || "",
             phone: data.personal_info?.phone || "",
             location: data.personal_info?.location || "",
@@ -115,7 +163,7 @@ export default function ProfilePage() {
           skills: data.skills || [],
           projects: data.projects || [],
           certifications: data.certifications || [],
-        }));
+        });
       } catch (err: any) {
         console.error("Failed to load profile", err);
       } finally {
@@ -125,7 +173,7 @@ export default function ProfilePage() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, isNewResume]);
 
   const handleSaveProfile = async (silent = false) => {
     try {
@@ -543,6 +591,27 @@ export default function ProfilePage() {
               ← <span className="hide-on-mobile">Dashboard</span>
             </button>
             <button
+              type="button"
+              onClick={handleClearAll}
+              title="Clear all fields and start with a blank form"
+              style={{
+                backgroundColor: "#FFFFFF",
+                color: "#DC2626",
+                border: "1px solid #FECACA",
+                padding: "7px 12px",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <RotateCcw size={13} />
+              <span>Clear All</span>
+            </button>
+            <button
               onClick={() => handleSaveProfile(false)}
               disabled={saving}
               style={{
@@ -707,33 +776,54 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <label style={{
-                      backgroundColor: "#2563EB",
-                      color: "#FFFFFF",
-                      padding: "10px 20px",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}>
-                      <UploadCloud size={16} />
-                      <span>Browse & Upload CV (PDF / DOCX)</span>
-                      <input
-                        type="file"
-                        accept=".pdf,.docx"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleFileSelect(e.target.files[0]);
-                            e.target.value = "";
-                          }
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                      <label style={{
+                        backgroundColor: "#2563EB",
+                        color: "#FFFFFF",
+                        padding: "10px 20px",
+                        borderRadius: "8px",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}>
+                        <UploadCloud size={16} />
+                        <span>Browse & Upload CV (PDF / DOCX)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleFileSelect(e.target.files[0]);
+                              e.target.value = "";
+                            }
+                          }}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleClearAll}
+                        style={{
+                          backgroundColor: "#FFFFFF",
+                          color: "#64748B",
+                          border: "1px solid #CBD5E1",
+                          padding: "10px 16px",
+                          borderRadius: "8px",
+                          fontSize: "14px",
+                          fontWeight: 500,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
                         }}
-                        style={{ display: "none" }}
-                      />
-                    </label>
+                      >
+                        <RotateCcw size={14} />
+                        <span>Start Blank</span>
+                      </button>
+                    </div>
                     {uploadError && (
                       <div style={{ color: "#DC2626", fontSize: "13px", marginTop: "12px", fontWeight: 500, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
                         <AlertTriangle size={14} />
@@ -1545,5 +1635,22 @@ export default function ProfilePage() {
         `}</style>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <ProtectedRoute>
+        <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "24px", fontWeight: 700, color: "#2563EB", marginBottom: "8px" }}>PrepCV</div>
+            <div style={{ fontSize: "14px", color: "#64748B" }}>Loading profile workspace...</div>
+          </div>
+        </div>
+      </ProtectedRoute>
+    }>
+      <ProfilePageContent />
+    </Suspense>
   );
 }
