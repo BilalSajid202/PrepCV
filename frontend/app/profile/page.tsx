@@ -188,30 +188,28 @@ export default function ProfilePage() {
       setUploadProgress(100);
       setUploadStepText("CV processed & saved to your profile!");
 
-      // The backend now returns the saved profile directly
+      // Replace profile cleanly with the freshly extracted CV data (no merging with old state)
       if (savedProfile) {
-        setProfile((prev) => ({
-          ...prev,
+        setProfile({
           personal_info: {
-            ...prev.personal_info,
-            full_name: savedProfile.personal_info?.full_name || prev.personal_info.full_name,
-            professional_title: savedProfile.personal_info?.professional_title || prev.personal_info.professional_title,
-            email: savedProfile.personal_info?.email || prev.personal_info.email,
-            phone: savedProfile.personal_info?.phone || prev.personal_info.phone,
-            location: savedProfile.personal_info?.location || prev.personal_info.location,
-            linkedin_url: savedProfile.personal_info?.linkedin_url || prev.personal_info.linkedin_url,
-            github_url: savedProfile.personal_info?.github_url || prev.personal_info.github_url,
-            portfolio_url: savedProfile.personal_info?.portfolio_url || prev.personal_info.portfolio_url,
-            summary: savedProfile.personal_info?.summary || prev.personal_info.summary,
+            full_name: savedProfile.personal_info?.full_name || "",
+            professional_title: savedProfile.personal_info?.professional_title || "",
+            email: savedProfile.personal_info?.email || "",
+            phone: savedProfile.personal_info?.phone || "",
+            location: savedProfile.personal_info?.location || "",
+            linkedin_url: savedProfile.personal_info?.linkedin_url || "",
+            github_url: savedProfile.personal_info?.github_url || "",
+            portfolio_url: savedProfile.personal_info?.portfolio_url || "",
+            summary: savedProfile.personal_info?.summary || "",
           },
-          experience: savedProfile.experience?.length ? savedProfile.experience : prev.experience,
-          education: savedProfile.education?.length ? savedProfile.education : prev.education,
-          skills: savedProfile.skills?.length ? Array.from(new Set([...prev.skills, ...savedProfile.skills])) : prev.skills,
-          projects: savedProfile.projects?.length ? savedProfile.projects : prev.projects,
-          certifications: savedProfile.certifications?.length ? savedProfile.certifications : prev.certifications,
-        }));
+          experience: savedProfile.experience || [],
+          education: savedProfile.education || [],
+          skills: savedProfile.skills || [],
+          projects: savedProfile.projects || [],
+          certifications: savedProfile.certifications || [],
+        });
         setExtractedNotice(true);
-        setSuccessMsg("Profile auto-saved from your CV! Review your data below.");
+        setSuccessMsg("Profile freshly updated from uploaded CV! Review your data below.");
         setTimeout(() => setSuccessMsg(null), 5000);
       }
     } catch (err: any) {
@@ -249,26 +247,24 @@ export default function ProfilePage() {
     try {
       const formatted = await formatProfileWithAI(profile, jobTitle);
       if (formatted) {
-        setProfile((prev) => ({
-          ...prev,
+        setProfile({
           personal_info: {
-            ...prev.personal_info,
-            full_name: formatted.personal_info?.full_name || prev.personal_info.full_name,
-            professional_title: formatted.personal_info?.professional_title || prev.personal_info.professional_title,
-            email: formatted.personal_info?.email || prev.personal_info.email,
-            phone: formatted.personal_info?.phone || prev.personal_info.phone,
-            location: formatted.personal_info?.location || prev.personal_info.location,
-            linkedin_url: formatted.personal_info?.linkedin_url || prev.personal_info.linkedin_url,
-            github_url: formatted.personal_info?.github_url || prev.personal_info.github_url,
-            portfolio_url: formatted.personal_info?.portfolio_url || prev.personal_info.portfolio_url,
-            summary: formatted.personal_info?.summary || prev.personal_info.summary,
+            full_name: formatted.personal_info?.full_name || "",
+            professional_title: formatted.personal_info?.professional_title || "",
+            email: formatted.personal_info?.email || "",
+            phone: formatted.personal_info?.phone || "",
+            location: formatted.personal_info?.location || "",
+            linkedin_url: formatted.personal_info?.linkedin_url || "",
+            github_url: formatted.personal_info?.github_url || "",
+            portfolio_url: formatted.personal_info?.portfolio_url || "",
+            summary: formatted.personal_info?.summary || "",
           },
-          experience: formatted.experience?.length ? formatted.experience : prev.experience,
-          education: formatted.education?.length ? formatted.education : prev.education,
-          skills: formatted.skills?.length ? Array.from(new Set([...prev.skills, ...formatted.skills])) : prev.skills,
-          projects: formatted.projects?.length ? formatted.projects : prev.projects,
-          certifications: formatted.certifications?.length ? formatted.certifications : prev.certifications,
-        }));
+          experience: formatted.experience || [],
+          education: formatted.education || [],
+          skills: formatted.skills || [],
+          projects: formatted.projects || [],
+          certifications: formatted.certifications || [],
+        });
         setSuccessMsg("Profile formatted and saved with AI! Review your enhanced data.");
         setTimeout(() => setSuccessMsg(null), 5000);
       }

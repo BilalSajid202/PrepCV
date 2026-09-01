@@ -134,7 +134,8 @@ def convert_document_to_markdown(file_bytes: bytes, filename: str) -> str:
     }
 
     for line in raw_lines:
-        stripped = line.strip()
+        line_clean = re.sub(r"[ \t]+", " ", line)
+        stripped = line_clean.strip()
         if not stripped:
             continue
 
@@ -328,7 +329,10 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
     summary_match = summary_section_pattern.search(raw_text)
     if summary_match:
         summary_text = summary_match.group(1).strip()
-        # Take the first substantial paragraph
+        # Clean line breaks and multi-space indentation within summary paragraphs
+        summary_text = re.sub(r"\n(?!\n)", " ", summary_text)
+        summary_text = re.sub(r"[ \t]+", " ", summary_text)
+        summary_text = re.sub(r"(\w+)\s+-\s*([a-z]+)", r"\1-\2", summary_text)
         for para in summary_text.split("\n\n"):
             clean_para = para.strip()
             if len(clean_para) > 30:
