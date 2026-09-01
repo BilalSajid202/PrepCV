@@ -486,8 +486,8 @@ async def get_ai_usage_analytics(db: AsyncSession) -> AIUsageStats:
     from app.integrations.huggingface.client import get_hf_key_manager
 
     km = get_hf_key_manager()
-    active_keys = km.active_key_count
-    total_keys = km.key_count
+    total_keys = getattr(km, "key_count", 0)
+    active_keys = getattr(km, "active_key_count", total_keys)
 
     # 1. Total Aggregates
     totals_query = select(

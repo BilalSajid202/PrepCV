@@ -42,6 +42,13 @@ class HFKeyManager:
         self._reload_keys()
         return len(self._keys)
 
+    @property
+    def active_key_count(self) -> int:
+        self._reload_keys()
+        now = time.time()
+        active = [k for k in self._keys if self._key_cooldowns.get(k, 0) <= now]
+        return len(active) if active else len(self._keys)
+
     def has_keys(self) -> bool:
         return self.key_count > 0
 
