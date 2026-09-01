@@ -13,8 +13,8 @@
 ## ✨ Features
 
 ### 📄 Resume Builder
-- **CV Upload & AI Extraction** — Upload a PDF or DOCX resume; the system extracts text, parses it into structured data via Google Gemini Flash, and auto-saves to your profile
-- **✨ Format with AI** — One-click formatting of manually-entered profile data through Gemini Flash with sanitized prompts, forced JSON schema output, and Pydantic validation
+- **CV Upload & AI Extraction** — Upload a PDF or DOCX resume; the system extracts text, parses it into structured data via Hugging Face Qwen 30B-class LLM, and auto-saves to your profile
+- **✨ Format with AI** — One-click formatting of manually-entered profile data through Hugging Face Qwen with sanitized prompts, forced JSON schema output, and Pydantic validation
 - **Target Job Title** — Every AI operation accepts a target position (e.g. "AI Engineer") to tailor content for that specific role
 - **Profile Wizard** — Step-by-step form covering Personal Info, Experience, Education, Skills, Projects, and Certifications
 - **ATS-Optimized Resume Generation** — Pure data → dynamic Jinja2 HTML template rendering with automatic content-density scaling (spacious / normal / compact / dense)
@@ -39,6 +39,10 @@
 - **Community Feedback RAG Loop** — Post-interview feedback (actual questions asked) is anonymized, PII-scrubbed, tagged by company/role/industry, and fed back into future question generation
 - **Session Management** — Create, list, and revisit past interview prep sessions
 
+### 🔄 Rotating API Key Management
+- **Automatic Load Distribution & Failover** — Pool multiple Hugging Face API keys (`HF_API_KEY_1..5` or `HF_API_KEYS`) with round-robin rotation and automatic cooldown/retry on rate limits (429/402/quota tiers)
+- **Customizable Model** — Easily change the active model via `HF_MODEL` in `.env` (defaults to `Qwen/Qwen2.5-Coder-32B-Instruct`)
+
 ### 🔐 Authentication
 - **JWT + HTTP-Only Cookie** — Secure auth with bcrypt password hashing, 7-day token expiry, and cookie-based session management
 - **Protected Routes** — All profile, resume, and interview endpoints require authentication
@@ -58,8 +62,8 @@
                                      ┌───────────┼───────────┐
                                      ▼           ▼           ▼
                               ┌──────────┐ ┌──────────┐ ┌──────────┐
-                              │PostgreSQL│ │ Gemini   │ │ Tavily   │
-                              │ (asyncpg)│ │ Flash    │ │ Search   │
+                              │PostgreSQL│ │ Hugging  │ │ Tavily   │
+                              │ (asyncpg)│ │ Face Qwen│ │ Search   │
                               └──────────┘ └──────────┘ └──────────┘
 ```
 
@@ -72,7 +76,7 @@ PrepCV/
 ├── backend/
 │   ├── app/
 │   │   ├── business_logic/          # Use cases & orchestration
-│   │   │   ├── ats_scorer.py        #   ATS scoring engine (Gemini + NLP fallback)
+│   │   │   ├── ats_scorer.py        #   ATS scoring engine (Hugging Face Qwen + NLP fallback)
 │   │   │   ├── auth.py              #   User registration & login
 │   │   │   ├── cv_extractor.py      #   PDF/DOCX text extraction + LLM parsing
 │   │   │   ├── feedback_rag.py      #   Interview feedback RAG (PII scrubbing, retrieval)
@@ -81,7 +85,7 @@ PrepCV/
 │   │   │   ├── resume_generator.py  #   Resume content generation & HTML/DOCX rendering
 │   │   │   └── resume_versioning.py #   Version history, comparison & restore
 │   │   ├── core/                    # Configuration, security & shared dependencies
-│   │   │   ├── config.py            #   Pydantic settings (env-based)
+│   │   │   ├── config.py            #   Pydantic settings (env-based, multi-key HF parser)
 │   │   │   ├── dependencies.py      #   FastAPI dependency injection
 │   │   │   └── security.py          #   JWT creation/decode, bcrypt hashing
 │   │   ├── database/                # PostgreSQL persistence
@@ -92,13 +96,12 @@ PrepCV/
 │   │   │   ├── auth/                #   Register, login, logout, /me
 │   │   │   ├── health/              #   Health check
 │   │   │   ├── interview/           #   Question generation, sessions, feedback
-│   │   │   ├── profile/             #   CRUD, CV upload, format-with-AI
+│   │   │   ├── profile/             #   CRUD, CV upload, format-with-ai
 │   │   │   └── resume/              #   Generate, list, update, ATS score, versions, export
 │   │   ├── function_calls/          # Application-facing adapters to reusable functions
 │   │   ├── functions/               # Small reusable functions (no HTTP concerns)
 │   │   ├── integrations/            # External service clients
-│   │   │   ├── gemini/              #   Google Gemini (prompt sanitization, schema validation)
-│   │   │   ├── grok/                #   xAI Grok client
+│   │   │   ├── huggingface/         #   Hugging Face client (rotating keys, Qwen 30B model)
 │   │   │   └── tavily/              #   Tavily web search (company intelligence)
 │   │   ├── schemas/                 # Pydantic request/response models
 │   │   │   ├── auth.py              #   Auth schemas
@@ -185,13 +188,14 @@ cp backend/.env.example backend/.env
 | Variable | Required | Description |
 |---|---|---|
 | `DATABASE_URL` | ✅ | PostgreSQL connection string (e.g. `postgresql+asyncpg://user:pass@localhost:5432/prepcv`) |
-| `GEMINI_API_KEY` | ✅ | Google Gemini API key — powers CV extraction, profile formatting, ATS scoring, bullet improvement, and interview question generation |
+| `HF_MODEL` | ⬜ | Hugging Face model ID (defaults to `Qwen/Qwen2.5-Coder-32B-Instruct`) |
+| `HF_API_URL` | ⬜ | Hugging Face router completions URL (defaults to `https://router.huggingface.co/v1/chat/completions`) |
+| `HF_API_KEY_1` .. `_5` | ✅ | Hugging Face API keys for automatic round-robin rotation and rate-limit failover |
 | `TAVILY_API_KEY` | ⬜ | Tavily API key — enables company URL intelligence for interview prep |
-| `XAI_API_KEY` | ⬜ | xAI Grok API key (optional alternative LLM) |
 | `SECRET_KEY` | ⬜ | JWT signing secret (defaults to a dev value — **change in production**) |
 | `ENVIRONMENT` | ⬜ | `development` or `production` |
 
-> **Note:** Without `GEMINI_API_KEY`, CV upload and AI formatting fall back to a deterministic heuristic parser. The ATS scorer and interview generator also have robust fallback logic.
+> **Note:** Without Hugging Face keys, CV upload and AI formatting fall back to a deterministic heuristic parser. The ATS scorer and interview generator also have robust deterministic NLP fallback logic.
 
 <br/>
 
@@ -215,7 +219,7 @@ All endpoints are prefixed under `/api`. Interactive documentation is available 
 | `GET` | `/api/profile` | Get candidate profile |
 | `PUT` | `/api/profile` | Save or update profile |
 | `POST` | `/api/profile/upload-cv` | Upload CV file (PDF/DOCX) → AI extraction → auto-save |
-| `POST` | `/api/profile/format-with-ai` | Format profile data with Gemini for a target role |
+| `POST` | `/api/profile/format-with-ai` | Format profile data with Hugging Face Qwen for a target role |
 
 ### Resume
 
@@ -272,13 +276,13 @@ The backend follows a strict layered architecture to keep concerns separated:
 ```
 Endpoints  →  Business Logic  →  Function Calls  →  Functions
     │               │                                    │
-    │               ├── Integrations (Gemini, Tavily)     │
+    │               ├── Integrations (HuggingFace, Tavily)│
     │               ├── Edge Cases (validation)           │
     │               └── Database (models, session)        │
     │                                                     │
     └── Schemas (Pydantic request/response models)        │
                                                           │
-                              Pure utilities, no HTTP ─────┘
+                               Pure utilities, no HTTP ─────┘
 ```
 
 - **Endpoints** translate HTTP requests/responses and call business logic
@@ -286,7 +290,7 @@ Endpoints  →  Business Logic  →  Function Calls  →  Functions
 - **Function Calls** are application-facing adapters to reusable functions
 - **Functions** are small, pure utilities with no HTTP or framework concerns
 - **Edge Cases** keep validation separate so business rules remain readable and testable
-- **Integrations** encapsulate external service clients (Gemini, Tavily, Grok)
+- **Integrations** encapsulate external service clients (HuggingFace, Tavily)
 
 <br/>
 
@@ -301,7 +305,7 @@ Endpoints  →  Business Logic  →  Function Calls  →  Functions
 | **asyncpg** | PostgreSQL async driver |
 | **Pydantic v2** | Data validation & settings |
 | **PyJWT + bcrypt** | JWT authentication |
-| **Google GenAI** | Gemini Flash LLM integration |
+| **Hugging Face Router** | Qwen 30B-class LLM with rotating API keys |
 | **Tavily** | Web search API (company intelligence) |
 | **Jinja2** | Resume HTML template rendering |
 | **pypdf + python-docx** | PDF/DOCX text extraction & export |

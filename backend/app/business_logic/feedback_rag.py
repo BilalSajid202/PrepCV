@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
 
 from app.database.models import InterviewFeedback, InterviewSession
-from app.integrations.gemini.client import _call_gemini_json_api, PRIMARY_MODEL, FALLBACK_MODEL
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)

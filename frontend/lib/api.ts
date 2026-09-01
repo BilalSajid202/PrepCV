@@ -4,6 +4,8 @@ export interface User {
   id: string;
   full_name: string;
   email: string;
+  role: string;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -495,4 +497,181 @@ export async function submitInterviewFeedback(params: {
 
 export async function listUserFeedback(): Promise<InterviewFeedbackItem[]> {
   return apiRequest<InterviewFeedbackItem[]>("/api/interview/feedback");
+}
+
+// ─── Admin API Types & Functions ────────────────────────────────────────────
+
+export interface FeatureUsageStat {
+  feature_id: string;
+  feature_key: string;
+  feature_name: string;
+  enabled_users_count: number;
+}
+
+export interface RecentUserAdmin {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AdminDashboardStats {
+  total_users: number;
+  active_users: number;
+  suspended_users: number;
+  admin_users: number;
+  total_resumes: number;
+  total_interview_sessions: number;
+  total_interview_feedbacks: number;
+  total_features: number;
+  feature_usage: FeatureUsageStat[];
+  recent_users: RecentUserAdmin[];
+}
+
+export interface UserFeatureInfo {
+  feature_id: string;
+  feature_key: string;
+  feature_name: string;
+  is_enabled: boolean;
+  granted_at: string;
+}
+
+export interface UserActivityStats {
+  resumes_count: number;
+  interview_sessions_count: number;
+  interview_feedbacks_count: number;
+}
+
+export interface UserAdminResponse {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  features: UserFeatureInfo[];
+  activity: UserActivityStats;
+}
+
+export interface UserAdminListResponse {
+  users: UserAdminResponse[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface FeatureResponse {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+  assigned_users_count: number;
+}
+
+// ─── Admin Dashboard ────────────────────────────────────────────────────────
+
+export async function fetchAdminDashboard(): Promise<AdminDashboardStats> {
+  return apiRequest<AdminDashboardStats>("/api/admin/dashboard");
+}
+
+// ─── Admin User Management ──────────────────────────────────────────────────
+
+export async function fetchAdminUsers(
+  search?: string,
+  page: number = 1,
+  limit: number = 20
+): Promise<UserAdminListResponse> {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  params.set("page", String(page));
+  params.set("limit", String(limit));
+  return apiRequest<UserAdminListResponse>(`/api/admin/users?${params.toString()}`);
+}
+
+export async function fetchAdminUserDetail(userId: string): Promise<UserAdminResponse> {
+  return apiRequest<UserAdminResponse>(`/api/admin/users/${userId}`);
+}
+
+export async function updateUserRole(userId: string, role: string): Promise<UserAdminResponse> {
+  return apiRequest<UserAdminResponse>(`/api/admin/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function updateUserStatus(userId: string, isActive: boolean): Promise<UserAdminResponse> {
+  return apiRequest<UserAdminResponse>(`/api/admin/users/${userId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+export async function fetchUserFeatures(userId: string): Promise<UserFeatureInfo[]> {
+  return apiRequest<UserFeatureInfo[]>(`/api/admin/users/${userId}/features`);
+}
+
+export async function toggleUserFeature(
+  userId: string,
+  featureId: string,
+  isEnabled: boolean
+): Promise<UserFeatureInfo> {
+  return apiRequest<UserFeatureInfo>(`/api/admin/users/${userId}/features`, {
+    method: "PUT",
+    body: JSON.stringify({ feature_id: featureId, is_enabled: isEnabled }),
+  });
+}
+
+// ─── Admin Feature Management ───────────────────────────────────────────────
+
+export async function fetchFeatures(): Promise<FeatureResponse[]> {
+  return apiRequest<FeatureResponse[]>("/api/admin/features");
+}
+
+export async function createFeature(data: {
+  key: string;
+  name: string;
+  description?: string;
+}): Promise<FeatureResponse> {
+  return apiRequest<FeatureResponse>("/api/admin/features", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateFeature(
+  featureId: string,
+  data: { name?: string; description?: string; is_active?: boolean }
+): Promise<FeatureResponse> {
+  return apiRequest<FeatureResponse>(`/api/admin/features/${featureId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteFeature(featureId: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/api/admin/features/${featureId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function bulkAssignFeature(
+  featureId: string,
+  userIds: string[],
+  isEnabled: boolean
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/api/admin/features/${featureId}/bulk-assign`, {
+    method: "POST",
+    body: JSON.stringify({ user_ids: userIds, is_enabled: isEnabled }),
+  });
+}
+
+// ─── Current User Features ──────────────────────────────────────────────────
+
+export async function fetchMyFeatures(): Promise<string[]> {
+  return apiRequest<string[]>("/api/admin/my-features");
 }

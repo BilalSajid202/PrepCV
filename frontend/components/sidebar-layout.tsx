@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useFeatures } from "@/lib/feature-context";
 
 interface SidebarLayoutProps {
   children: React.ReactNode;
@@ -10,6 +11,7 @@ interface SidebarLayoutProps {
 
 export default function SidebarLayout({ children }: SidebarLayoutProps) {
   const { user, logout } = useAuth();
+  const { hasFeature } = useFeatures();
   const router = useRouter();
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -17,12 +19,13 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
 
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: "📊" },
-    { label: "Resumes", href: "/profile", icon: "📄" },
-    { label: "ATS Check", href: "/ats-checker", icon: "🎯" },
-    { label: "Interview Prep", href: "/interview-prep", icon: "💬" },
+    { label: "Resumes", href: "/profile", icon: "📄", featureKey: "resume_generation" },
+    { label: "ATS Check", href: "/ats-checker", icon: "🎯", featureKey: "ats_checker" },
+    { label: "Interview Prep", href: "/interview-prep", icon: "💬", featureKey: "interview_prep" },
     { label: "Sessions", href: "/interview-sessions", icon: "📚" },
-    { label: "Feedback", href: "/interview-feedback", icon: "💡" },
+    { label: "Feedback", href: "/interview-feedback", icon: "💡", featureKey: "interview_feedback" },
     { label: "Settings", href: "/profile", icon: "⚙️" },
+    ...(user?.role === "admin" ? [{ label: "Admin Panel", href: "/admin", icon: "🛡️" }] : []),
   ];
 
   const handleLogout = async () => {
@@ -70,10 +73,10 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
             fontWeight: 800,
             fontSize: "18px",
           }}>
-            J
+            P
           </div>
           <span style={{ fontSize: "20px", fontWeight: 800, letterSpacing: "-0.02em", color: "#0F172A" }}>
-            JOB<span style={{ color: "#2563EB" }}>FIT</span>
+            Prep<span style={{ color: "#2563EB" }}>CV</span>
           </span>
           <span style={{ fontSize: "11px", backgroundColor: "#EFF6FF", color: "#2563EB", padding: "2px 6px", borderRadius: "10px", fontWeight: 700, marginLeft: "4px" }}>
             AI PREP
@@ -123,7 +126,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
                 width: "36px",
                 height: "36px",
                 borderRadius: "50%",
-                backgroundColor: "#2563EB",
+                backgroundColor: user?.role === "admin" ? "#F59E0B" : "#2563EB",
                 color: "#FFFFFF",
                 display: "flex",
                 alignItems: "center",
@@ -135,10 +138,10 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
               </div>
               <div style={{ textAlign: "left" }}>
                 <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
-                  {user?.full_name || "Muhammad"}
+                  {user?.full_name || "Candidate"}
                 </div>
                 <div style={{ fontSize: "11px", color: "#64748B" }}>
-                  {user?.email || "Candidate"}
+                  {user?.role === "admin" ? "🛡️ Administrator" : (user?.email || "Candidate")}
                 </div>
               </div>
               <span style={{ fontSize: "10px", color: "#94A3B8" }}>▼</span>
@@ -157,6 +160,14 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
                 padding: "6px",
                 zIndex: 50,
               }}>
+                {user?.role === "admin" && (
+                  <button
+                    onClick={() => { router.push("/admin"); setShowUserMenu(false); }}
+                    style={{ width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", fontSize: "13px", cursor: "pointer", borderRadius: "4px", color: "#F59E0B", fontWeight: 700 }}
+                  >
+                    🛡️ Admin Panel
+                  </button>
+                )}
                 <button
                   onClick={() => { router.push("/profile"); setShowUserMenu(false); }}
                   style={{ width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", fontSize: "13px", cursor: "pointer", borderRadius: "4px", color: "#334155" }}
@@ -197,6 +208,8 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
         }}>
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href === "/dashboard" && pathname === "/");
+            const isLocked = item.featureKey && !hasFeature(item.featureKey);
+
             return (
               <button
                 key={item.href + item.label}
@@ -204,27 +217,35 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "12px",
+                  justifyContent: "space-between",
                   padding: "10px 14px",
                   borderRadius: "8px",
                   border: "none",
                   backgroundColor: isActive ? "#EFF6FF" : "transparent",
-                  color: isActive ? "#2563EB" : "#475569",
+                  color: isActive ? "#2563EB" : isLocked ? "#94A3B8" : "#475569",
                   fontWeight: isActive ? 700 : 500,
                   fontSize: "13.5px",
                   cursor: "pointer",
                   textAlign: "left",
                   transition: "background-color 0.15s ease",
+                  opacity: isLocked ? 0.75 : 1,
                 }}
               >
-                <span style={{ fontSize: "16px" }}>{item.icon}</span>
-                <span>{item.label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ fontSize: "16px" }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+                {isLocked && (
+                  <span style={{ fontSize: "11px", color: "#F59E0B" }} title="Contact administrator for feature access">
+                    🔒
+                  </span>
+                )}
               </button>
             );
           })}
 
           <div style={{ marginTop: "auto", padding: "12px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginBottom: "4px" }}>🎯 JobFit Pro Tips</div>
+            <div style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginBottom: "4px" }}>🎯 PrepCV Pro Tips</div>
             <div style={{ fontSize: "11.5px", color: "#64748B", lineHeight: 1.4 }}>
               Paste your target JD in ATS Check and Interview Prep to generate tailored answers.
             </div>
@@ -242,7 +263,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15, 23, 42, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
           <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", padding: "28px", maxWidth: "500px", width: "90%" }}>
             <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", margin: "0 0 10px 0" }}>
-              JobFit AI Preparation Guide
+              PrepCV AI Preparation Guide
             </h3>
             <div style={{ fontSize: "13.5px", color: "#475569", lineHeight: 1.6, marginBottom: "20px" }}>
               <p><strong>1. Resumes:</strong> Build ATS-safe single-column resumes with quantified bullet points.</p>
@@ -265,3 +286,4 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
     </div>
   );
 }
+

@@ -21,8 +21,13 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email, password);
-      router.push("/dashboard");
+      const user = await login(email, password);
+      // Redirect admins to admin panel, regular users to dashboard
+      if (user.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please check your credentials.");
     } finally {

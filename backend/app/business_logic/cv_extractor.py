@@ -98,25 +98,23 @@ def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
 
 
 async def parse_cv_text_with_llm(raw_text: str, job_title: str = "") -> Dict[str, Any]:
-    """Parse raw extracted CV text into structured profile JSON using Google Gemini Flash with fallback."""
-    from app.integrations.gemini.client import format_cv_with_gemini
-
-    settings = get_settings()
-    api_key = settings.gemini_api_key
+    """Parse raw extracted CV text into structured profile JSON using Hugging Face Qwen model with fallback."""
+    from app.integrations.huggingface.client import format_cv_with_hf, get_hf_key_manager
 
     # Step 1: Use a comprehensive heuristic pass to get a baseline structured profile
     rough_profile = fallback_cv_parser(raw_text)
 
-    # Step 2: If Gemini API key is available, send the rough profile + raw text
-    #         to Gemini for full semantic parsing across all formatting styles
-    if api_key:
+    # Step 2: If Hugging Face keys are configured, send the rough profile + raw text
+    #         to Qwen for full semantic parsing across all formatting styles
+    km = get_hf_key_manager()
+    if km.has_keys():
         try:
             enriched_profile = {**rough_profile, "_raw_text": raw_text[:9000]}
-            formatted = await format_cv_with_gemini(enriched_profile, job_title)
+            formatted = await format_cv_with_hf(enriched_profile, job_title)
             formatted.pop("_raw_text", None)
             return formatted
         except Exception as e:
-            logger.warning(f"Gemini LLM formatting failed, falling back to heuristic parser: {e}")
+            logger.warning(f"Hugging Face LLM formatting failed, falling back to heuristic parser: {e}")
 
     return rough_profile
 

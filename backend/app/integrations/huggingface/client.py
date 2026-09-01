@@ -1,7 +1,9 @@
+import asyncio
 import json
 import logging
 import re
-from typing import Dict, Any, Optional
+import time
+from typing import Dict, Any, List, Optional
 
 import httpx
 
@@ -10,16 +12,89 @@ from app.schemas.profile import ProfileSchema
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-PRIMARY_MODEL = "gemini-2.5-flash"
-FALLBACK_MODEL = "gemini-1.5-flash"
+# Default model (can be overridden via HF_MODEL in .env)
+DEFAULT_HF_MODEL = "Qwen/Qwen2.5-Coder-32B-Instruct"
+DEFAULT_HF_API_URL = "https://router.huggingface.co/v1/chat/completions"
+
+
+class HFKeyManager:
+    """
+    Thread-safe & async-friendly rotating API Key Manager for Hugging Face.
+    Rotates through configured keys, automatically tracking rate limits (429/402/quota)
+    and failing over to the next available key.
+    """
+
+    def __init__(self):
+        self._lock = asyncio.Lock()
+        self._keys: List[str] = []
+        self._current_index: int = 0
+        self._key_cooldowns: Dict[str, float] = {}  # key -> timestamp until cooldown expires
+        self._reload_keys()
+
+    def _reload_keys(self) -> None:
+        settings = get_settings()
+        self._keys = settings.get_hf_api_keys()
+        if not self._keys and settings.hf_api_key:
+            self._keys = [settings.hf_api_key]
+
+    @property
+    def key_count(self) -> int:
+        self._reload_keys()
+        return len(self._keys)
+
+    def has_keys(self) -> bool:
+        return self.key_count > 0
+
+    async def get_active_keys(self) -> List[str]:
+        """Return all keys currently not in cooldown."""
+        self._reload_keys()
+        now = time.time()
+        active = [k for k in self._keys if self._key_cooldowns.get(k, 0) <= now]
+        # If all keys are in cooldown, reset all to allow immediate retry
+        if not active and self._keys:
+            logger.warning("All Hugging Face API keys are currently in cooldown; resetting cooldowns.")
+            self._key_cooldowns.clear()
+            return list(self._keys)
+        return active
+
+    async def get_next_key(self) -> Optional[str]:
+        """Rotate to and return the next active key."""
+        async with self._lock:
+            active_keys = await self.get_active_keys()
+            if not active_keys:
+                return None
+
+            self._current_index = (self._current_index + 1) % len(active_keys)
+            selected = active_keys[self._current_index]
+            return selected
+
+    def report_rate_limit(self, key: str, cooldown_seconds: int = 60) -> None:
+        """Mark a key as rate-limited / tier-exhausted temporarily."""
+        mask = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "key"
+        self._key_cooldowns[key] = time.time() + cooldown_seconds
+        logger.warning(
+            f"Hugging Face key [{mask}] reached rate-limit/quota. Placed on {cooldown_seconds}s cooldown. "
+            f"Active keys remaining: {len([k for k, exp in self._key_cooldowns.items() if exp <= time.time()])}/{len(self._keys)}"
+        )
+
+    def report_success(self, key: str) -> None:
+        """Clear any cooldown on successful call."""
+        if key in self._key_cooldowns:
+            del self._key_cooldowns[key]
+
+
+# Global key manager singleton
+_key_manager = HFKeyManager()
+
+
+def get_hf_key_manager() -> HFKeyManager:
+    return _key_manager
 
 
 def _sanitize_string(val: Any, max_len: int = 2000) -> str:
     """Sanitize user string: strip trailing/leading whitespace and truncate excessive lengths."""
     if not isinstance(val, str):
         return ""
-    # Strip null bytes and non-printable control characters except standard newlines/tabs
     clean = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", val).strip()
     return clean[:max_len]
 
@@ -48,7 +123,7 @@ def _sanitize_profile_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     sanitized_exp = []
-    for exp in (raw.get("experience") or [])[:15]:  # limit to max 15 roles
+    for exp in (raw.get("experience") or [])[:15]:
         if isinstance(exp, dict):
             achievements = [_sanitize_string(a, 500) for a in (exp.get("achievements") or [])[:10] if a]
             sanitized_exp.append({
@@ -120,96 +195,116 @@ def _sanitize_profile_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-async def _call_gemini_json_api(
+async def _call_hf_json_api(
     system_instruction: str,
     user_payload: str,
-    api_key: str,
-    model_name: str = PRIMARY_MODEL,
+    model_name: Optional[str] = None,
+    api_key: Optional[str] = None,
     retry_count: int = 1,
 ) -> Optional[str]:
     """
-    Call Google Gemini API forcing JSON response.
-    Logs the raw response for debugging and retries once if needed.
+    Call Hugging Face Router chat completions API forcing JSON output.
+    Uses rotating API keys with automatic failover when a key hits rate limits or quota tiers.
     """
-    url = f"{GEMINI_API_BASE}/{model_name}:generateContent?key={api_key}"
+    settings = get_settings()
+    model = model_name or settings.hf_model or DEFAULT_HF_MODEL
+    api_url = settings.hf_api_url or DEFAULT_HF_API_URL
+    km = get_hf_key_manager()
+
+    messages = []
+    if system_instruction:
+        messages.append({
+            "role": "system",
+            "content": f"{system_instruction}\n\nIMPORTANT: Return ONLY raw, valid JSON. Do not include markdown code block backticks, explanations, or prose."
+        })
+    messages.append({"role": "user", "content": user_payload})
 
     payload = {
-        "system_instruction": {
-            "parts": [{"text": system_instruction}]
-        },
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": user_payload}]
-            }
-        ],
-        "generationConfig": {
-            "temperature": 0.2,
-            "responseMimeType": "application/json"
-        }
+        "model": model,
+        "messages": messages,
+        "temperature": 0.2,
+        "max_tokens": 4096,
     }
 
-    for attempt in range(retry_count + 1):
+    total_keys = km.key_count
+    max_attempts = max(total_keys, 1) * (retry_count + 1)
+
+    for attempt in range(max_attempts):
+        key = api_key or await km.get_next_key()
+        if not key:
+            logger.warning("No Hugging Face API key configured or available.")
+            return None
+
+        key_mask = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "key"
+        headers = {
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json"
+        }
+
         try:
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                resp = await client.post(url, json=payload)
+            async with httpx.AsyncClient(timeout=35.0) as client:
+                resp = await client.post(api_url, headers=headers, json=payload)
+
+                # Handle rate limiting or quota exhaustion (429, 402, or specific error messages)
+                if resp.status_code in (429, 402, 403, 401):
+                    logger.warning(
+                        f"HF key [{key_mask}] returned status {resp.status_code}: {resp.text[:200]}. Rotating key..."
+                    )
+                    km.report_rate_limit(key, cooldown_seconds=90)
+                    if api_key:  # If caller passed explicit static key, don't loop indefinitely
+                        return None
+                    continue
 
                 if resp.status_code != 200:
                     logger.warning(
-                        f"Gemini API ({model_name}) attempt {attempt + 1} returned status {resp.status_code}: {resp.text[:400]}"
+                        f"HF API ({model}) returned status {resp.status_code} on key [{key_mask}]: {resp.text[:300]}"
                     )
-                    if attempt < retry_count:
-                        continue
-                    return None
+                    # If provider doesn't support model or bad request, rotate key or retry
+                    if "rate" in resp.text.lower() or "quota" in resp.text.lower() or "limit" in resp.text.lower():
+                        km.report_rate_limit(key, cooldown_seconds=60)
+                    continue
 
                 data = resp.json()
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    logger.warning(f"Gemini API returned no candidates on attempt {attempt + 1}.")
-                    if attempt < retry_count:
-                        continue
-                    return None
+                choices = data.get("choices", [])
+                if not choices:
+                    logger.warning(f"HF API ({model}) returned no choices on key [{key_mask}].")
+                    continue
 
-                raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                
-                # Rule 3: Store/log raw response for debugging
+                raw_text = choices[0].get("message", {}).get("content", "")
+                km.report_success(key)
                 logger.info(
-                    f"Gemini raw response received ({len(raw_text)} chars, attempt {attempt + 1}): {raw_text[:300]}..."
+                    f"HF ({model}) response received via [{key_mask}] ({len(raw_text)} chars): {raw_text[:200]}..."
                 )
                 return raw_text
 
         except httpx.TimeoutException:
-            logger.warning(f"Gemini API timeout on attempt {attempt + 1}.")
-            if attempt < retry_count:
-                continue
+            logger.warning(f"HF API timeout on key [{key_mask}]. Rotating key...")
+            km.report_rate_limit(key, cooldown_seconds=30)
         except Exception as e:
-            logger.error(f"Gemini API request error on attempt {attempt + 1}: {e}")
-            if attempt < retry_count:
-                continue
+            logger.error(f"HF API request error on key [{key_mask}]: {e}")
+            km.report_rate_limit(key, cooldown_seconds=30)
 
     return None
 
 
-async def format_cv_with_gemini(
+async def format_cv_with_hf(
     raw_profile: Dict[str, Any],
     job_title: str,
 ) -> Dict[str, Any]:
     """
-    Format and enhance CV / profile data using Google Gemini Flash.
+    Format and enhance CV / profile data using Hugging Face Qwen 30B-class model.
     Strictly follows:
       1. Sanitize user data before building prompts.
       2. Force structured JSON schema output & validate against ProfileSchema before returning.
       3. Log raw model responses for easy debugging.
     """
-    settings = get_settings()
-    api_key = settings.gemini_api_key
+    km = get_hf_key_manager()
 
-    # Pre-sanitize inputs (Rule 1)
     clean_job_title = _sanitize_job_title(job_title)
     clean_profile = _sanitize_profile_dict(raw_profile)
 
-    if not api_key:
-        logger.warning("GEMINI_API_KEY is not set – returning sanitized profile without AI formatting.")
+    if not km.has_keys():
+        logger.warning("No HF_API_KEY is configured – returning sanitized profile without AI formatting.")
         clean_profile.pop("_raw_text", None)
         return clean_profile
 
@@ -305,42 +400,29 @@ Return ONLY valid JSON matching this schema:
   ]
 }}"""
 
-    # Prepare user message containing only candidate data (Rule 1)
     user_payload = f"Candidate Profile Data:\n{json.dumps(clean_profile, indent=2)}"
 
-    # Call Gemini API with JSON output mode (Rule 2)
-    raw_response = await _call_gemini_json_api(
+    raw_response = await _call_hf_json_api(
         system_instruction=system_instruction,
         user_payload=user_payload,
-        api_key=api_key,
-        model_name=PRIMARY_MODEL,
         retry_count=1,
     )
 
-    if not raw_response:
-        logger.warning("Gemini primary model failed, attempting fallback model...")
-        raw_response = await _call_gemini_json_api(
-            system_instruction=system_instruction,
-            user_payload=user_payload,
-            api_key=api_key,
-            model_name=FALLBACK_MODEL,
-            retry_count=1,
-        )
-
     if raw_response:
         try:
-            # Strip potential code fences if any
+            # Strip markdown code fences if any
             clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
+            # Find outermost JSON object
+            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
+            if json_match:
+                clean_json_str = json_match.group(0)
+
             parsed = json.loads(clean_json_str)
-
-            # Rule 2: Validate against Pydantic schema before returning for Postgres write
             validated_schema = ProfileSchema.model_validate(parsed)
-            logger.info("Successfully validated formatted profile with Pydantic ProfileSchema.")
+            logger.info("Successfully validated formatted profile with Pydantic ProfileSchema using Hugging Face Qwen.")
             return validated_schema.model_dump()
-
         except Exception as err:
-            # Rule 3: Log parse/validation failure with the raw response for debugging
-            logger.error(f"Failed to parse/validate Gemini response: {err}. Raw response was: {raw_response[:500]}")
+            logger.error(f"Failed to parse/validate HF response: {err}. Raw response was: {raw_response[:500]}")
 
     # Fallback to sanitized raw profile on any failure
     logger.warning("Falling back to pre-sanitized input profile.")
@@ -348,10 +430,9 @@ Return ONLY valid JSON matching this schema:
     return clean_profile
 
 
-async def improve_bullet_with_gemini(section: str, original_text: str, instruction: str) -> Dict[str, str]:
-    """Improve specific section text or bullet point using Gemini with input sanitization."""
-    settings = get_settings()
-    api_key = settings.gemini_api_key
+async def improve_bullet_with_hf(section: str, original_text: str, instruction: str) -> Dict[str, str]:
+    """Improve specific section text or bullet point using Hugging Face Qwen with input sanitization."""
+    km = get_hf_key_manager()
 
     clean_section = _sanitize_string(section, 50)
     clean_text = _sanitize_string(original_text, 2000)
@@ -360,7 +441,7 @@ async def improve_bullet_with_gemini(section: str, original_text: str, instructi
     if not clean_text:
         return {"improved_text": "", "explanation": "No text provided."}
 
-    if not api_key:
+    if not km.has_keys():
         words = clean_text.split()
         improved = clean_text
         if words and not words[0].endswith("ed"):
@@ -383,17 +464,19 @@ Return ONLY a JSON object with keys:
         "instruction": clean_inst,
     })
 
-    raw_response = await _call_gemini_json_api(
+    raw_response = await _call_hf_json_api(
         system_instruction=system_instruction,
         user_payload=user_payload,
-        api_key=api_key,
-        model_name=PRIMARY_MODEL,
         retry_count=1,
     )
 
     if raw_response:
         try:
             clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
+            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
+            if json_match:
+                clean_json_str = json_match.group(0)
+
             parsed = json.loads(clean_json_str)
             if "improved_text" in parsed:
                 return {

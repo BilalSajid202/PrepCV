@@ -7,6 +7,7 @@ from sqlalchemy import select, desc
 from app.database.models import InterviewSession, InterviewFeedback, User
 from app.database.session import get_db_session
 from app.endpoints.auth.deps import get_current_user
+from app.endpoints.auth.feature_guard import require_feature
 from app.business_logic.interview_generator import generate_interview_questions
 from app.business_logic.feedback_rag import save_interview_feedback
 from app.schemas.interview import (
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["Interview Prep & Feedback"])
 
 
-@router.post("/generate", response_model=InterviewSessionResponse)
+@router.post("/generate", response_model=InterviewSessionResponse, dependencies=[Depends(require_feature("interview_prep"))])
 async def generate_session_questions(
     req: InterviewGenerateRequest,
     current_user: User = Depends(get_current_user),
@@ -126,7 +127,7 @@ async def get_interview_session(
     )
 
 
-@router.post("/feedback", response_model=InterviewFeedbackResponse)
+@router.post("/feedback", response_model=InterviewFeedbackResponse, dependencies=[Depends(require_feature("interview_feedback"))])
 async def submit_feedback(
     req: InterviewFeedbackSubmitRequest,
     current_user: User = Depends(get_current_user),

@@ -221,7 +221,7 @@ export default function ProfilePage() {
     setShowJobTitleModal(true);
   };
 
-  // Send current profile data through Grok for AI enhancement
+  // Send current profile data through Hugging Face Qwen for AI enhancement
   const handleFormatWithAI = async (jobTitle: string) => {
     setShowJobTitleModal(false);
     setFormatting(true);

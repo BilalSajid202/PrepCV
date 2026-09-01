@@ -5,10 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_logic.cv_extractor import extract_raw_text_from_file, parse_cv_text_with_llm
 from app.business_logic.profile import get_user_profile, save_or_update_profile
-from app.integrations.gemini.client import format_cv_with_gemini
+from app.integrations.huggingface.client import format_cv_with_hf
 from app.database.models import User
 from app.database.session import get_db_session
 from app.endpoints.auth.deps import get_current_user
+from app.endpoints.auth.feature_guard import require_feature
 from app.schemas.profile import ProfileResponse, ProfileSchema
 
 # Inline request model for the format-with-ai endpoint
@@ -95,15 +96,15 @@ async def update_profile(
     )
 
 
-@router.post("/upload-cv", response_model=ProfileResponse)
+@router.post("/upload-cv", response_model=ProfileResponse, dependencies=[Depends(require_feature("cv_upload"))])
 async def upload_cv(
     file: UploadFile = File(...),
     job_title: str = Form(""),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Upload CV/Resume (PDF or DOCX), extract text, format with Gemini Flash LLM using
-    the target job title for context, and auto-save the structured profile to the database."""
+    """Upload CV/Resume (PDF or DOCX), extract text, format with Hugging Face Qwen LLM using
+    strict input sanitization, forced JSON output schema, and ProfileSchema validation."""
     logger.info(f"==> [CV Upload] Received upload request from user '{current_user.id}' ({current_user.email})")
     logger.info(f"==> [CV Upload] Filename: '{file.filename}', Content-Type: '{file.content_type}', Target Job Title: '{job_title}'")
 
@@ -198,13 +199,13 @@ async def format_profile_with_ai(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
-    """Format manually-entered profile data using Google Gemini Flash.
+    """Format manually-entered profile data using Hugging Face Qwen LLM.
     Enhances descriptions, populates missing fields, and tailors content
     for the specified job title. Saves the formatted result to the database."""
     raw_profile = req.profile.model_dump()
 
-    # Send through Gemini with input sanitization and schema validation
-    formatted_profile = await format_cv_with_gemini(raw_profile, req.job_title)
+    # Send through Hugging Face Qwen with input sanitization and schema validation
+    formatted_profile = await format_cv_with_hf(raw_profile, req.job_title)
 
     # Ensure user identity fields are preserved
     if "personal_info" in formatted_profile:

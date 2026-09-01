@@ -26,6 +26,7 @@ from app.business_logic.resume_versioning import (
 from app.database.models import User
 from app.database.session import get_db_session
 from app.endpoints.auth.deps import get_current_user
+from app.endpoints.auth.feature_guard import require_feature
 from app.schemas.resume import (
     AIImproveRequest,
     AIImproveResponse,
@@ -50,7 +51,7 @@ router = APIRouter(prefix="", tags=["ATS Resume Builder"])
 # STATIC ROUTES — must come BEFORE any /{resume_id} parameterized routes
 # ===========================================================================
 
-@router.post("/generate", response_model=ResumeResponse)
+@router.post("/generate", response_model=ResumeResponse, dependencies=[Depends(require_feature("resume_generation"))])
 async def generate_resume(
     req: ResumeGenerateRequest,
     current_user: User = Depends(get_current_user),
@@ -132,7 +133,7 @@ async def list_resumes(
     ]
 
 
-@router.post("/ai-improve", response_model=AIImproveResponse)
+@router.post("/ai-improve", response_model=AIImproveResponse, dependencies=[Depends(require_feature("ai_improve"))])
 async def ai_improve(
     req: AIImproveRequest,
     current_user: User = Depends(get_current_user),
@@ -150,7 +151,7 @@ async def ai_improve(
     )
 
 
-@router.post("/ats-score-direct", response_model=ATSScoreResponse)
+@router.post("/ats-score-direct", response_model=ATSScoreResponse, dependencies=[Depends(require_feature("ats_checker"))])
 async def score_direct_content(
     req: ATSScoreRequest,
     current_user: User = Depends(get_current_user),
@@ -259,7 +260,7 @@ async def update_resume(
     )
 
 
-@router.post("/{resume_id}/ats-score", response_model=ATSScoreResponse)
+@router.post("/{resume_id}/ats-score", response_model=ATSScoreResponse, dependencies=[Depends(require_feature("ats_checker"))])
 async def score_saved_resume(
     resume_id: str,
     req: ATSScoreRequest,

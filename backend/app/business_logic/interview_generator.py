@@ -10,7 +10,7 @@ from sqlalchemy import select, desc
 from app.database.models import InterviewSession, Resume, User
 from app.integrations.tavily.client import extract_company_intelligence
 from app.business_logic.feedback_rag import retrieve_relevant_interview_feedback
-from app.integrations.gemini.client import _call_gemini_json_api, PRIMARY_MODEL, FALLBACK_MODEL
+from app.integrations.huggingface.client import _call_hf_json_api, get_hf_key_manager
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -168,13 +168,11 @@ async def generate_interview_questions(
         limit=5,
     )
 
-    # 4. Generate questions using Gemini with rich multi-source context
-    settings = get_settings()
-    api_key = settings.gemini_api_key
-
+    # 4. Generate questions using Hugging Face Qwen with rich multi-source context
+    km = get_hf_key_manager()
     generated_questions: List[Dict[str, Any]] = []
 
-    if api_key:
+    if km.has_keys():
         try:
             system_instruction = """You are a senior hiring manager and tech interview architect.
 Generate a tailored, high-caliber set of 9 to 11 interview questions customized for the candidate, company, and role.
@@ -213,16 +211,17 @@ CRITICAL RULES:
                 "past_real_interview_feedback_examples": [f["question"] for f in rag_feedback_examples]
             })
 
-            raw_response = await _call_gemini_json_api(
+            raw_response = await _call_hf_json_api(
                 system_instruction=system_instruction,
                 user_payload=user_payload,
-                api_key=api_key,
-                model_name=PRIMARY_MODEL,
                 retry_count=1,
             )
 
             if raw_response:
                 clean_json = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
+                json_match = re.search(r"\{[\s\S]*\}", clean_json)
+                if json_match:
+                    clean_json = json_match.group(0)
                 parsed = json.loads(clean_json)
                 q_list = parsed.get("questions", [])
                 if isinstance(q_list, list) and len(q_list) >= 6:
@@ -231,9 +230,9 @@ CRITICAL RULES:
                         if not q.get("difficulty"): q["difficulty"] = "Medium"
                         if not q.get("focus_area"): q["focus_area"] = q.get("category", "General")
                     generated_questions = q_list
-                    logger.info(f"Successfully generated {len(generated_questions)} AI interview questions for {clean_company}.")
+                    logger.info(f"Successfully generated {len(generated_questions)} AI interview questions with Qwen for {clean_company}.")
         except Exception as e:
-            logger.warning(f"Gemini interview question generation failed: {e}. Using deterministic fallback.")
+            logger.warning(f"Hugging Face interview question generation failed: {e}. Using deterministic fallback.")
 
     # Fallback if AI generation failed or key missing
     if not generated_questions:

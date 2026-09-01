@@ -464,9 +464,9 @@ async def generate_ats_resume_content(profile_dict: Dict[str, Any], target_role:
 
 
 async def improve_bullet_with_ai(section: str, original_text: str, instruction: str) -> Dict[str, str]:
-    """Improve specific section text or bullet point using Gemini with input sanitization."""
-    from app.integrations.gemini.client import improve_bullet_with_gemini
-    return await improve_bullet_with_gemini(section=section, original_text=original_text, instruction=instruction)
+    """Improve specific section text or bullet point using Hugging Face Qwen with input sanitization."""
+    from app.integrations.huggingface.client import improve_bullet_with_hf
+    return await improve_bullet_with_hf(section=section, original_text=original_text, instruction=instruction)
 
 
 async def save_generated_resume(db: AsyncSession, user: User, title: str, profile_snapshot: Dict[str, Any], content: ResumeContentSchema) -> Resume:

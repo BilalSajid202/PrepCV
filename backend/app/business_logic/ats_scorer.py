@@ -4,7 +4,7 @@ import re
 from typing import Dict, Any, List, Optional, Set, Tuple
 
 from app.core.config import get_settings
-from app.integrations.gemini.client import _call_gemini_json_api, PRIMARY_MODEL, FALLBACK_MODEL
+from app.integrations.huggingface.client import _call_hf_json_api, get_hf_key_manager
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +262,7 @@ def _deterministic_ats_analysis(job_description: str, resume_content: Dict[str, 
 
 async def score_resume_against_jd(job_description: str, resume_content: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Score resume against target job description using Gemini AI with fallback to deterministic NLP scoring.
+    Score resume against target job description using Hugging Face Qwen AI with fallback to deterministic NLP scoring.
     Complies with FR-8, FR-9, and NFR-10.
     """
     if not job_description or not job_description.strip():
@@ -277,17 +277,16 @@ async def score_resume_against_jd(job_description: str, resume_content: Dict[str
             "recommendations": []
         }
 
-    settings = get_settings()
-    api_key = settings.gemini_api_key
+    km = get_hf_key_manager()
 
     # Run deterministic scoring as baseline & fallback
     deterministic_result = _deterministic_ats_analysis(job_description, resume_content)
 
-    if not api_key:
-        logger.info("Gemini API key not configured – using deterministic ATS scoring engine.")
+    if not km.has_keys():
+        logger.info("Hugging Face API keys not configured – using deterministic ATS scoring engine.")
         return deterministic_result
 
-    # If API key is available, call Gemini for enriched contextual analysis
+    # If keys are available, call Hugging Face Qwen for enriched contextual analysis
     try:
         resume_summary_text = _extract_all_resume_text(resume_content)
         
@@ -342,16 +341,17 @@ CRITICAL RULES:
             "explicit_skills": resume_content.get("skills") or []
         })
 
-        raw_response = await _call_gemini_json_api(
+        raw_response = await _call_hf_json_api(
             system_instruction=system_instruction,
             user_payload=user_payload,
-            api_key=api_key,
-            model_name=PRIMARY_MODEL,
             retry_count=1,
         )
 
         if raw_response:
             clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
+            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
+            if json_match:
+                clean_json_str = json_match.group(0)
             parsed = json.loads(clean_json_str)
 
             # Validate key fields
@@ -364,6 +364,6 @@ CRITICAL RULES:
                 return parsed
 
     except Exception as e:
-        logger.warning(f"Gemini ATS scoring failed, falling back to deterministic engine: {e}")
+        logger.warning(f"Hugging Face ATS scoring failed, falling back to deterministic engine: {e}")
 
     return deterministic_result

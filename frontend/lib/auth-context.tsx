@@ -6,6 +6,7 @@ import { apiRequest, AuthResponse, User } from "./api";
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isAdmin: boolean;
   login: (email: string, password: string) => Promise<User>;
   register: (full_name: string, email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
@@ -16,6 +17,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const isAdmin = user?.role === "admin";
 
   const checkAuth = async () => {
     try {
@@ -81,7 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -19,6 +19,7 @@ from app.endpoints.health.router import router as health_router
 from app.endpoints.profile.router import router as profile_router
 from app.endpoints.resume.router import router as resume_router
 from app.endpoints.interview.router import router as interview_router
+from app.endpoints.admin.router import router as admin_router
 
 
 @asynccontextmanager
@@ -66,3 +67,6 @@ app.include_router(resume_router, prefix="/api/resumes")
 app.include_router(interview_router, prefix="/interview")
 app.include_router(interview_router, prefix="/api/interview")
 
+# Mount admin routes under both /admin and /api/admin
+app.include_router(admin_router, prefix="/admin")
+app.include_router(admin_router, prefix="/api/admin")

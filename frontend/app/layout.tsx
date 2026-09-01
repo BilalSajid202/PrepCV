@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { FeatureProvider } from "@/lib/feature-context";
 
 export const metadata: Metadata = {
   title: "PrepCV | AI-Powered Career Platform",
@@ -11,8 +12,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <FeatureProvider>{children}</FeatureProvider>
+        </AuthProvider>
       </body>
     </html>
   );
 }
+
