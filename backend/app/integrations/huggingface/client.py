@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import httpx
 
@@ -19,16 +19,15 @@ DEFAULT_HF_API_URL = "https://router.huggingface.co/v1/chat/completions"
 
 class HFKeyManager:
     """
-    Thread-safe & async-friendly rotating API Key Manager for Hugging Face.
-    Rotates through configured keys, automatically tracking rate limits (429/402/quota)
-    and failing over to the next available key.
+    Thread-safe rotating API Key Manager for Hugging Face with per-key expiry
+    timestamps and non-blocking failover.
     """
 
     def __init__(self):
         self._lock = asyncio.Lock()
         self._keys: List[str] = []
         self._current_index: int = 0
-        self._key_cooldowns: Dict[str, float] = {}  # key -> timestamp until cooldown expires
+        self._available_at: Dict[str, float] = {}  # key -> epoch timestamp when key becomes available
         self._reload_keys()
 
     def _reload_keys(self) -> None:
@@ -46,48 +45,84 @@ class HFKeyManager:
     def active_key_count(self) -> int:
         self._reload_keys()
         now = time.time()
-        active = [k for k in self._keys if self._key_cooldowns.get(k, 0) <= now]
+        active = [k for k in self._keys if self._available_at.get(k, 0) <= now]
         return len(active) if active else len(self._keys)
 
     def has_keys(self) -> bool:
         return self.key_count > 0
 
-    async def get_active_keys(self) -> List[str]:
-        """Return all keys currently not in cooldown."""
-        self._reload_keys()
-        now = time.time()
-        active = [k for k in self._keys if self._key_cooldowns.get(k, 0) <= now]
-        # If all keys are in cooldown, reset all to allow immediate retry
-        if not active and self._keys:
-            logger.warning("All Hugging Face API keys are currently in cooldown; resetting cooldowns.")
-            self._key_cooldowns.clear()
-            return list(self._keys)
-        return active
+    async def get_best_key(self, max_allowed_wait_seconds: float = 2.0) -> Tuple[Optional[str], float]:
+        """
+        Non-blocking key selector:
+        1. Always inspect all keys and their available_at timestamps.
+        2. Prioritize immediately free keys (available_at <= now).
+        3. If all keys are in cooldown, pick the one with the earliest available_at timestamp.
+        4. If wait time for the earliest key is <= max_allowed_wait_seconds (e.g. 2s),
+           do a short bounded wait.
+        5. If wait time > max_allowed_wait_seconds, return (None, wait_time) immediately
+           so the calling pipeline can failover without stalling.
+        """
+        async with self._lock:
+            self._reload_keys()
+            if not self._keys:
+                return None, 0.0
+
+            now = time.time()
+            # Check for currently free keys
+            free_keys = [k for k in self._keys if self._available_at.get(k, 0) <= now]
+            if free_keys:
+                self._current_index = (self._current_index + 1) % len(free_keys)
+                return free_keys[self._current_index], 0.0
+
+            # All keys are in cooldown - find the key with earliest available_at
+            earliest_key = min(self._keys, key=lambda k: self._available_at.get(k, 0))
+            earliest_time = self._available_at.get(earliest_key, 0)
+            wait_time = max(0.0, earliest_time - now)
+
+            if wait_time <= max_allowed_wait_seconds:
+                # Bounded short wait
+                logger.info(
+                    f"All HF keys in cooldown. Earliest key available in {wait_time:.1f}s. "
+                    f"Performing short bounded wait ({wait_time:.1f}s)..."
+                )
+                await asyncio.sleep(wait_time)
+                return earliest_key, wait_time
+
+            # Cooldown is too long (> 2s) -> trigger non-blocking failover immediately!
+            logger.warning(
+                f"HF key pool exhausted. Soonest key available in {wait_time:.1f}s (>{max_allowed_wait_seconds}s). "
+                f"Triggering non-blocking fast failover."
+            )
+            return None, wait_time
 
     async def get_next_key(self) -> Optional[str]:
-        """Rotate to and return the next active key."""
-        async with self._lock:
-            active_keys = await self.get_active_keys()
-            if not active_keys:
-                return None
+        """Legacy compatibility wrapper for get_best_key."""
+        key, _ = await self.get_best_key(max_allowed_wait_seconds=2.0)
+        return key
 
-            self._current_index = (self._current_index + 1) % len(active_keys)
-            selected = active_keys[self._current_index]
-            return selected
-
-    def report_rate_limit(self, key: str, cooldown_seconds: int = 60) -> None:
-        """Mark a key as rate-limited / tier-exhausted temporarily."""
+    def report_rate_limit(self, key: str, cooldown_seconds: int = 30) -> None:
+        """Mark a key as rate-limited / tier-exhausted with an expiry timestamp."""
         mask = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "key"
-        self._key_cooldowns[key] = time.time() + cooldown_seconds
+        self._available_at[key] = time.time() + cooldown_seconds
+        now = time.time()
+        active_left = len([k for k in self._keys if self._available_at.get(k, 0) <= now])
         logger.warning(
             f"Hugging Face key [{mask}] reached rate-limit/quota. Placed on {cooldown_seconds}s cooldown. "
-            f"Active keys remaining: {len([k for k, exp in self._key_cooldowns.items() if exp <= time.time()])}/{len(self._keys)}"
+            f"Active keys available: {active_left}/{len(self._keys)}"
+        )
+
+    def report_timeout(self, key: str, cooldown_seconds: int = 5) -> None:
+        """Mark a key on short transient cooldown for network timeout / connection glitch."""
+        mask = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "key"
+        self._available_at[key] = time.time() + cooldown_seconds
+        logger.warning(
+            f"HF API timeout on key [{mask}]. Short {cooldown_seconds}s cooldown applied. Rotating..."
         )
 
     def report_success(self, key: str) -> None:
-        """Clear any cooldown on successful call."""
-        if key in self._key_cooldowns:
-            del self._key_cooldowns[key]
+        """Clear cooldown on successful call."""
+        if key in self._available_at:
+            del self._available_at[key]
 
 
 # Global key manager singleton
@@ -242,13 +277,19 @@ async def _call_hf_json_api(
         "max_tokens": max_tokens,
     }
 
-    total_keys = km.key_count
-    max_attempts = max(total_keys, 1) * (retry_count + 1)
+    # Bound attempts to at most 2 (1 primary + 1 failover key) to never stall the request pipeline
+    max_attempts = min(max(retry_count + 1, 1), 2)
 
     for attempt in range(max_attempts):
-        key = api_key or await km.get_next_key()
+        if api_key:
+            key = api_key
+        else:
+            key, wait_time = await km.get_best_key(max_allowed_wait_seconds=2.0)
+
         if not key:
-            logger.warning("No Hugging Face API key configured or available.")
+            logger.warning(
+                "No Hugging Face API key available within non-blocking window. Fast failover to local engine."
+            )
             return None
 
         key_mask = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "key"
@@ -259,17 +300,17 @@ async def _call_hf_json_api(
 
         call_start = time.time()
         try:
-            async with httpx.AsyncClient(timeout=35.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(api_url, headers=headers, json=payload)
 
             response_time_ms = int((time.time() - call_start) * 1000)
 
-            # Handle rate limiting or quota exhaustion (429, 402, or specific error messages)
+            # Handle rate limiting or quota exhaustion (429, 402, 403, 401)
             if resp.status_code in (429, 402, 403, 401):
                 logger.warning(
                     f"HF key [{key_mask}] returned status {resp.status_code}: {resp.text[:200]}. Rotating key..."
                 )
-                km.report_rate_limit(key, cooldown_seconds=90)
+                km.report_rate_limit(key, cooldown_seconds=30)
                 if api_key:  # If caller passed explicit static key, don't loop indefinitely
                     return None
                 continue
@@ -278,15 +319,17 @@ async def _call_hf_json_api(
                 logger.warning(
                     f"HF API ({model}) returned status {resp.status_code} on key [{key_mask}]: {resp.text[:300]}"
                 )
-                # If provider doesn't support model or bad request, rotate key or retry
                 if "rate" in resp.text.lower() or "quota" in resp.text.lower() or "limit" in resp.text.lower():
-                    km.report_rate_limit(key, cooldown_seconds=60)
+                    km.report_rate_limit(key, cooldown_seconds=30)
+                else:
+                    km.report_timeout(key, cooldown_seconds=5)
                 continue
 
             data = resp.json()
             choices = data.get("choices", [])
             if not choices:
                 logger.warning(f"HF API ({model}) returned no choices on key [{key_mask}].")
+                km.report_timeout(key, cooldown_seconds=5)
                 continue
 
             raw_text = choices[0].get("message", {}).get("content", "")
@@ -319,10 +362,10 @@ async def _call_hf_json_api(
 
         except httpx.TimeoutException:
             logger.warning(f"HF API timeout on key [{key_mask}]. Rotating key...")
-            km.report_rate_limit(key, cooldown_seconds=30)
+            km.report_timeout(key, cooldown_seconds=5)
         except Exception as e:
             logger.error(f"HF API request error on key [{key_mask}]: {e}")
-            km.report_rate_limit(key, cooldown_seconds=30)
+            km.report_timeout(key, cooldown_seconds=5)
 
     return None
 
@@ -339,7 +382,8 @@ async def log_ai_usage(
     api_key_hint: str = "",
     error_message: Optional[str] = None,
 ) -> None:
-    """Persist an AI usage log record to the database."""
+    """Persist an AI usage log record to the database with comprehensive error handling."""
+    import traceback
     try:
         from app.database.session import get_session_factory
         from app.database.models import AIUsageLog
@@ -360,13 +404,17 @@ async def log_ai_usage(
             )
             session.add(log_entry)
             await session.commit()
-            logger.debug(
-                f"AI usage logged: user={user_id}, feature={feature}, "
-                f"tokens={total_tokens}, status={status}, {response_time_ms}ms"
+            logger.info(
+                f"[✓ LOGGED] AI usage: user={user_id}, feature={feature}, model={model}, "
+                f"tokens={total_tokens} (in:{input_tokens} out:{output_tokens}), status={status}, {response_time_ms}ms"
             )
     except Exception as e:
-        # Never let logging failures break the main flow
-        logger.error(f"Failed to log AI usage: {e}")
+        # Log the full error for debugging, but never let logging break the main flow
+        logger.error(
+            f"[✗ LOG FAILED] Could not persist AI usage log. Error: {e}\nContext: "
+            f"user={user_id}, feature={feature}, tokens={total_tokens}\n"
+            f"Traceback:\n{traceback.format_exc()}"
+        )
 
 
 async def format_cv_with_hf(
@@ -627,8 +675,8 @@ async def extract_cv_with_hf(
         return None
 
     clean_job_title = _sanitize_job_title(job_title)
-    # Send up to 12000 chars of raw text to cover multi-page CVs
-    clean_text = _sanitize_string(raw_text, 12000)
+    # Send up to 8000 chars of raw text for optimal latency and coverage
+    clean_text = _sanitize_string(raw_text, 8000)
 
     if not clean_text or len(clean_text) < 20:
         logger.warning("Raw text too short for AI extraction.")
@@ -750,8 +798,8 @@ Return ONLY valid JSON matching this exact schema:
     api_result = await _call_hf_json_api(
         system_instruction=system_instruction,
         user_payload=user_payload,
-        retry_count=2,
-        max_tokens=6000,
+        retry_count=1,
+        max_tokens=3000,
     )
 
     if api_result:

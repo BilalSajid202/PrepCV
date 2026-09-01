@@ -50,7 +50,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     loadDashboard();
-  }, []);
+    
+    // Auto-refresh dashboard every 10 seconds when viewing AI analytics
+    const refreshInterval = setInterval(() => {
+      if (activeTab === "ai_analytics") {
+        loadDashboard();
+      }
+    }, 10000);
+    
+    return () => clearInterval(refreshInterval);
+  }, [activeTab]);
 
   if (loading) {
     return (
