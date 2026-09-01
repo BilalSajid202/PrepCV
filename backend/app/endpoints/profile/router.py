@@ -142,17 +142,17 @@ async def upload_cv(
         )
 
     try:
-        logger.info(f"==> [CV Upload] Extracting text from '{file.filename}'...")
+        logger.info(f"==> [CV Upload] Converting '{file.filename}' to structured Markdown (.md)...")
         raw_text = extract_raw_text_from_file(file_bytes, file.filename)
-        logger.info(f"==> [CV Upload] Extracted {len(raw_text)} characters of text. Sample: {raw_text[:200]!r}")
+        logger.info(f"==> [CV Upload] Markdown document generated ({len(raw_text)} chars). Preview:\n{raw_text[:300]}")
     except Exception as e:
-        logger.error(f"==> [CV Upload] Extraction failure: {e}", exc_info=True)
+        logger.error(f"==> [CV Upload] Document to Markdown conversion failure: {e}", exc_info=True)
         raise
 
     try:
-        logger.info(f"==> [CV Upload] Sending text to LLM parser for role: '{job_title}'...")
+        logger.info(f"==> [CV Upload] Sending Markdown document to AI model for role: '{job_title}'...")
         parsed_profile = await parse_cv_text_with_llm(raw_text, job_title=job_title, user_id=current_user.id)
-        logger.info(f"==> [CV Upload] Parsing completed. Found: {len(parsed_profile.get('experience', []))} roles, {len(parsed_profile.get('education', []))} education items, {len(parsed_profile.get('skills', []))} skills.")
+        logger.info(f"==> [CV Upload] Parsing completed. Found: {len(parsed_profile.get('experience', []))} roles, {len(parsed_profile.get('projects', []))} projects, {len(parsed_profile.get('education', []))} education items, {len(parsed_profile.get('skills', []))} skills.")
     except Exception as e:
         logger.error(f"==> [CV Upload] LLM parsing error: {e}", exc_info=True)
         raise

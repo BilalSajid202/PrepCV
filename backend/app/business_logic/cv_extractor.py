@@ -18,37 +18,36 @@ def clean_extracted_text(text: str) -> str:
     """Normalize extracted text: clean non-standard bullets, excessive whitespace, and control chars."""
     if not text:
         return ""
-    # Standardize diverse bullet points and list symbols to a simple dash
     text = re.sub(r"[•▪►●◆★✓✔■–—]", "-", text)
-    # Replace multiple spaces with a single space (except newlines)
     text = re.sub(r"[ \t]+", " ", text)
-    # Collapse 3+ consecutive newlines to 2
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
-    """Extract text from PDF (including multi-column/tables) or DOCX (paragraphs + tables)."""
+def convert_document_to_markdown(file_bytes: bytes, filename: str) -> str:
+    """
+    Convert uploaded document (PDF or DOCX) into clean, semantic Markdown (.md) representation:
+    - Identifies main sections and applies Markdown H1 headers (# Section)
+    - Identifies job/project/education sub-items (## Item)
+    - Normalizes bullet points to standard Markdown lists (- Bullet)
+    - Preserves tables as standard Markdown tables
+    """
     lower_filename = filename.lower()
-    extracted_text = ""
+    raw_lines: List[str] = []
 
     if lower_filename.endswith(".pdf"):
         try:
             reader = PdfReader(io.BytesIO(file_bytes))
-            text_parts = []
             for page in reader.pages:
                 page_text = ""
-                # Attempt layout mode extraction first to preserve tables and two-column layouts
                 try:
                     page_text = page.extract_text(extraction_mode="layout")
                 except Exception:
                     page_text = ""
-                # Fallback to standard extraction if layout mode isn't supported or empty
                 if not page_text or not page_text.strip():
                     page_text = page.extract_text() or ""
                 if page_text.strip():
-                    text_parts.append(page_text)
-            extracted_text = "\n\n".join(text_parts)
+                    raw_lines.extend(page_text.splitlines())
         except Exception as e:
             logger.error(f"PDF extraction error: {e}")
             raise HTTPException(
@@ -58,23 +57,42 @@ def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
     elif lower_filename.endswith(".docx"):
         try:
             doc = docx.Document(io.BytesIO(file_bytes))
-            text_parts = []
-            # Extract main paragraphs
             for para in doc.paragraphs:
-                if para.text.strip():
-                    text_parts.append(para.text.strip())
-            # Extract tables (both horizontal and vertical/two-column grid CVs)
+                p_text = para.text.strip()
+                if not p_text:
+                    continue
+                style_name = para.style.name.lower() if para.style else ""
+                if "heading 1" in style_name:
+                    raw_lines.append(f"# {p_text}")
+                elif "heading 2" in style_name or "heading 3" in style_name:
+                    raw_lines.append(f"## {p_text}")
+                elif "bullet" in style_name or "list" in style_name:
+                    raw_lines.append(f"- {p_text}")
+                else:
+                    if para.runs and all(r.bold for r in para.runs if r.text.strip()):
+                        raw_lines.append(f"## {p_text}")
+                    else:
+                        raw_lines.append(p_text)
+
             for table in doc.tables:
+                table_rows = []
                 for row in table.rows:
-                    row_cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                    # Deduplicate repeated text from merged cells in docx tables
+                    cells = [c.text.strip() for c in row.cells if c.text.strip()]
                     unique_cells = []
-                    for c in row_cells:
+                    for c in cells:
                         if not unique_cells or c != unique_cells[-1]:
                             unique_cells.append(c)
                     if unique_cells:
-                        text_parts.append(" | ".join(unique_cells))
-            extracted_text = "\n".join(text_parts)
+                        table_rows.append(unique_cells)
+                if table_rows:
+                    header = table_rows[0]
+                    raw_lines.append("")
+                    raw_lines.append("| " + " | ".join(header) + " |")
+                    raw_lines.append("| " + " | ".join(["---"] * len(header)) + " |")
+                    for row in table_rows[1:]:
+                        padded = row + [""] * (len(header) - len(row))
+                        raw_lines.append("| " + " | ".join(padded[:len(header)]) + " |")
+                    raw_lines.append("")
         except Exception as e:
             logger.error(f"DOCX extraction error: {e}")
             raise HTTPException(
@@ -87,14 +105,80 @@ def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
             detail="Unsupported file format. Only PDF (.pdf) and Word (.docx) documents are allowed."
         )
 
-    clean_text = clean_extracted_text(extracted_text)
-    if not clean_text or len(clean_text) < 10:
+    # Convert lines to clean semantic Markdown
+    md_lines: List[str] = []
+    section_keywords = {
+        "summary": "PROFESSIONAL SUMMARY",
+        "professional summary": "PROFESSIONAL SUMMARY",
+        "about me": "ABOUT ME",
+        "profile": "PROFESSIONAL SUMMARY",
+        "objective": "CAREER OBJECTIVE",
+        "work experience": "WORK EXPERIENCE",
+        "professional experience": "WORK EXPERIENCE",
+        "experience": "WORK EXPERIENCE",
+        "employment history": "WORK EXPERIENCE",
+        "projects": "PROJECTS",
+        "key projects": "PROJECTS",
+        "personal projects": "PROJECTS",
+        "academic projects": "PROJECTS",
+        "selected projects": "PROJECTS",
+        "education": "EDUCATION",
+        "academic background": "EDUCATION",
+        "skills": "SKILLS",
+        "core skills": "SKILLS",
+        "technical skills": "SKILLS",
+        "certifications": "CERTIFICATIONS",
+        "certificates": "CERTIFICATIONS",
+        "licenses & certifications": "CERTIFICATIONS",
+        "courses": "CERTIFICATIONS",
+    }
+
+    for line in raw_lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        if stripped.startswith("#"):
+            md_lines.append(f"\n{stripped}\n")
+            continue
+
+        clean_lower = stripped.lower().rstrip(":")
+
+        if clean_lower in section_keywords:
+            section_title = section_keywords[clean_lower]
+            md_lines.append(f"\n# {section_title}\n")
+            continue
+
+        if re.match(r"^[-•*–—►▪●◆★✔■]\s*", stripped):
+            clean_bullet = re.sub(r"^[-•*–—►▪●◆★✔■]\s*", "", stripped).strip()
+            if clean_bullet:
+                md_lines.append(f"- {clean_bullet}")
+            continue
+
+        if "|" in stripped:
+            parts = [p.strip() for p in stripped.split("|") if p.strip()]
+            if len(parts) >= 2:
+                if any(re.search(r"\d{4}|present|developer|engineer|manager|lead|intern|university|college|inc|llc|ltd", p, re.I) for p in parts):
+                    md_lines.append(f"\n## {' | '.join(parts)}")
+                    continue
+
+        md_lines.append(stripped)
+
+    md_document = "\n".join(md_lines)
+    md_document = re.sub(r"\n{3,}", "\n\n", md_document).strip()
+
+    if not md_document or len(md_document) < 10:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The uploaded file contains no extractable text. Please ensure it is a valid document with selectable text."
         )
 
-    return clean_text
+    return md_document
+
+
+def extract_raw_text_from_file(file_bytes: bytes, filename: str) -> str:
+    """Extract and convert document to clean Markdown format."""
+    return convert_document_to_markdown(file_bytes, filename)
 
 
 async def parse_cv_text_with_llm(raw_text: str, job_title: str = "", user_id: Optional[str] = None) -> Dict[str, Any]:
@@ -212,19 +296,21 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
     github_match = re.search(r"github\.com/[a-zA-Z0-9_-]+", raw_text)
     portfolio_match = re.search(r"(?:portfolio|website)[:\s]*(https?://[^\s]+)", raw_text, re.IGNORECASE)
 
-    # ── Candidate Name (first non-header line that isn't an email or link) ──
+    # ── Candidate Name (first line that isn't an email or link) ──
     full_name = ""
     for line in lines[:5]:
-        if not re.search(r"@|linkedin|github|http|\.com|\+?\d{7,}", line, re.IGNORECASE) and len(line) < 50:
-            full_name = line
+        clean_l = re.sub(r"^[#\s*]+|[*]+$", "", line).strip()
+        if clean_l and not re.search(r"@|linkedin|github|http|\.com|\+?\d{7,}", clean_l, re.IGNORECASE) and len(clean_l) < 50:
+            full_name = clean_l
             break
 
     # ── Professional Title (line after name, usually contains job title keywords) ──
     professional_title = ""
     title_keywords = r"(?:engineer|developer|designer|analyst|manager|consultant|architect|scientist|lecturer|teacher|assistant|intern|lead|senior|junior|full.?stack|front.?end|back.?end|devops|data|machine.?learning|ai|ml|software)"
     for line in lines[1:6]:
-        if re.search(title_keywords, line, re.IGNORECASE) and len(line) < 120:
-            professional_title = line
+        clean_t = re.sub(r"^[#\s*]+|[*]+$", "", line).strip()
+        if re.search(title_keywords, clean_t, re.IGNORECASE) and len(clean_t) < 120:
+            professional_title = clean_t
             break
 
     # ── Location ──
@@ -245,14 +331,14 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
         # Take the first substantial paragraph
         for para in summary_text.split("\n\n"):
             clean_para = para.strip()
-            if len(clean_para) > 40:
+            if len(clean_para) > 30:
                 summary = clean_para
                 break
 
-    # ── Experience Extraction (section-aware) ──
+    # ── Experience Extraction (section-aware & format-agnostic) ──
     experiences = []
     exp_section_pattern = re.compile(
-        r"(?:PROFESSIONAL\s+EXPERIENCE|WORK\s+EXPERIENCE|EXPERIENCE|EMPLOYMENT\s+HISTORY|CAREER\s+HISTORY)\s*\n([\s\S]*?)(?=\n\s*(?:EDUCATION|ACADEMIC|SKILLS|PROJECTS|CERTIFICATIONS|PUBLICATIONS|RESEARCH|AWARDS|INTERESTS|REFERENCES|CORE\s+SKILLS|TRAINING|OPEN-SOURCE|$))",
+        r"(?:PROFESSIONAL\s+EXPERIENCE|WORK\s+EXPERIENCE|EXPERIENCE|EMPLOYMENT\s+HISTORY|CAREER\s+HISTORY)\s*\n([\s\S]*?)(?=\n\s*(?:EDUCATION|ACADEMIC|SKILLS|PROJECTS|KEY\s+PROJECTS|PERSONAL\s+PROJECTS|CERTIFICATIONS|PUBLICATIONS|RESEARCH|AWARDS|INTERESTS|REFERENCES|CORE\s+SKILLS|TECHNICAL\s+SKILLS|TRAINING|OPEN-SOURCE|$))",
         re.IGNORECASE
     )
     exp_match = exp_section_pattern.search(raw_text)
@@ -263,70 +349,91 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
         current_entry = None
         current_bullets = []
 
+        date_regex = re.compile(
+            r"(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{4})\s*[-–—/to\s]+\s*(Present|Current|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{4})",
+            re.IGNORECASE
+        )
+
         for line in exp_lines:
             stripped = line.strip()
             if not stripped:
                 continue
 
-            # Improved header detection: Look for "Company | Position" with optional "(Type)" and date range
-            # Pattern: "Company | Position (Type/Remote) Start – End" or "Company | Position Start – End"
-            date_range_match = re.search(
-                r"(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{4})\s*[-–—]\s*(Present|Current|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4}|\d{1,2}/\d{1,2}/\d{4}|\d{4})",
-                stripped, re.IGNORECASE
-            )
+            date_range_match = date_regex.search(stripped)
+            is_bullet = stripped.startswith("-") or stripped.startswith("•") or stripped.startswith("*") or stripped.startswith("–")
             
-            # Check if this is a header line (has pipe separator or date range, and is not a bullet)
-            has_pipe = "|" in stripped and not stripped.startswith("-")
-            is_header = (date_range_match and not stripped.startswith("-")) or (has_pipe and len(stripped) < 200 and not stripped.startswith("-"))
+            # Header line detection
+            has_pipe = "|" in stripped and not is_bullet
+            has_at = re.search(r"\b(?:at|@)\b", stripped, re.I) and not is_bullet
+            has_date = bool(date_range_match) and not is_bullet
 
-            if is_header and len(stripped) > 10:
-                # Save previous entry
+            is_new_entry = False
+            if (has_date or has_pipe or has_at) and not is_bullet and len(stripped) > 5 and len(stripped) < 200:
+                is_new_entry = True
+
+            if is_new_entry:
                 if current_entry:
                     current_entry["achievements"] = current_bullets
-                    if current_entry["company"] or current_entry["position"]:  # Only add if has meaningful data
+                    if current_entry["company"] or current_entry["position"]:
                         experiences.append(current_entry)
                     current_bullets = []
 
-                # Parse header line
-                company = ""
-                position = ""
-                location = ""
                 start_date = ""
                 end_date = ""
                 is_current = False
-                emp_type = "Full-time"
+                header_text = stripped
 
-                # Extract date range first
                 if date_range_match:
-                    start_date = date_range_match.group(1)
-                    end_date = date_range_match.group(2)
+                    start_date = date_range_match.group(1).strip()
+                    end_date = date_range_match.group(2).strip()
                     if end_date.lower() in ("present", "current"):
                         is_current = True
-                    header_text = stripped[:date_range_match.start()].strip()
-                else:
-                    header_text = stripped
+                    header_text = (stripped[:date_range_match.start()] + " " + stripped[date_range_match.end():]).strip()
 
-                # Parse company | position | location format
-                parts = [p.strip() for p in header_text.split("|") if p.strip()]
-                
-                if len(parts) >= 2:
-                    company = parts[0]
-                    # Extract position and employment type from position field
-                    pos_text = parts[1]
-                    # Look for employment type in parentheses
-                    type_match = re.search(r"\((Remote|Contractual|Contract|Part-time|Full-time|Internship|Temporary)\)", pos_text, re.IGNORECASE)
-                    if type_match:
-                        emp_type = type_match.group(1)
-                        position = pos_text[:type_match.start()].strip()
+                company = ""
+                position = ""
+                location = ""
+                emp_type = "Full-time"
+
+                # Check for employment type in parentheses
+                type_match = re.search(r"\((Remote|Contractual|Contract|Part-time|Full-time|Internship|Temporary|Hybrid)\)", header_text, re.I)
+                if type_match:
+                    emp_type = type_match.group(1)
+                    header_text = header_text[:type_match.start()].strip() + " " + header_text[type_match.end():].strip()
+
+                if "|" in header_text:
+                    parts = [p.strip() for p in header_text.split("|") if p.strip()]
+                    if len(parts) >= 2:
+                        company = parts[0]
+                        position = parts[1]
+                        if len(parts) > 2:
+                            location = parts[2]
+                    elif len(parts) == 1:
+                        company = parts[0]
+                elif re.search(r"\b(?:at|@)\b", header_text, re.I):
+                    at_parts = re.split(r"\b(?:at|@)\b", header_text, flags=re.I)
+                    position = at_parts[0].strip()
+                    company = at_parts[1].strip() if len(at_parts) > 1 else ""
+                elif " - " in header_text:
+                    dash_parts = [p.strip() for p in header_text.split(" - ") if p.strip()]
+                    if len(dash_parts) >= 2:
+                        company = dash_parts[0]
+                        position = dash_parts[1]
                     else:
-                        position = pos_text
-                    location = parts[2] if len(parts) > 2 else ""
-                elif len(parts) == 1:
-                    company = parts[0]
+                        company = dash_parts[0]
+                elif "," in header_text:
+                    comma_parts = [p.strip() for p in header_text.split(",") if p.strip()]
+                    if len(comma_parts) >= 2:
+                        position = comma_parts[0]
+                        company = comma_parts[1]
+                    else:
+                        company = comma_parts[0]
+                else:
+                    company = header_text
 
                 current_entry = {
                     "company": company,
-                    "position": position,
+                    "position": position or "Professional",
                     "location": location,
                     "employment_type": emp_type,
                     "start_date": start_date,
@@ -335,45 +442,22 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
                     "description": "",
                     "achievements": [],
                 }
-            elif stripped.startswith("-") or stripped.startswith("•") or stripped.startswith("*"):
-                # Extract bullet point
-                bullet = re.sub(r"^[-•*\s]+", "", stripped).strip()
-                if len(bullet) > 10 and current_entry is not None:
+            elif is_bullet:
+                bullet = re.sub(r"^[-•*–\s]+", "", stripped).strip()
+                if len(bullet) > 8 and current_entry is not None:
                     current_bullets.append(bullet)
+            elif current_entry and not current_entry.get("position") and len(stripped) < 80:
+                current_entry["position"] = stripped
 
-        # Don't forget the last entry
         if current_entry:
             current_entry["achievements"] = current_bullets
             if current_entry["company"] or current_entry["position"]:
                 experiences.append(current_entry)
 
-    # If section parsing found nothing, create fallback from action bullets
-    if not experiences:
-        action_bullets = []
-        for line in lines:
-            stripped = line.strip()
-            if stripped.startswith("-") or re.match(r"^(Built|Developed|Designed|Implemented|Spearheaded|Managed|Led|Optimized|Created|Engineered|Automated)\b", stripped, re.I):
-                clean_bullet = stripped.lstrip("- *•").strip()
-                if 20 < len(clean_bullet) < 400:
-                    action_bullets.append(clean_bullet)
-
-        if action_bullets:
-            experiences.append({
-                "company": "",
-                "position": "",
-                "location": "",
-                "employment_type": "Full-time",
-                "start_date": "",
-                "end_date": "",
-                "is_current": False,
-                "description": "Extracted from uploaded CV (heuristic fallback)",
-                "achievements": action_bullets[:8],
-            })
-
     # ── Education Extraction ──
     education = []
     edu_section_pattern = re.compile(
-        r"(?:EDUCATION|ACADEMIC|QUALIFICATIONS|DEGREES)\s*\n([\s\S]*?)(?=\n\s*(?:EXPERIENCE|SKILLS|PROJECTS|CERTIFICATIONS|PUBLICATIONS|RESEARCH|AWARDS|INTERESTS|REFERENCES|PROFESSIONAL|CORE\s+SKILLS|TRAINING|OPEN-SOURCE|LANGUAGES|HOBBIES|$))",
+        r"(?:EDUCATION|ACADEMIC|QUALIFICATIONS|DEGREES)\s*\n([\s\S]*?)(?=\n\s*(?:EXPERIENCE|SKILLS|PROJECTS|KEY\s+PROJECTS|PERSONAL\s+PROJECTS|CERTIFICATIONS|PUBLICATIONS|RESEARCH|AWARDS|INTERESTS|REFERENCES|PROFESSIONAL|CORE\s+SKILLS|TECHNICAL\s+SKILLS|TRAINING|OPEN-SOURCE|LANGUAGES|HOBBIES|$))",
         re.IGNORECASE
     )
     edu_match = edu_section_pattern.search(raw_text)
@@ -383,27 +467,22 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
         
         current_edu = None
         for i, line in enumerate(edu_lines):
-            # Look for date range (year patterns)
             date_match = re.search(
-                r"(\d{4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4})\s*[-–—]\s*(Present|Current|\d{4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4})",
+                r"(\d{4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4})\s*[-–—/to\s]+\s*(Present|Current|\d{4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4})",
                 line, re.IGNORECASE
             )
-            # Look for GPA/CGPA
             gpa_match = re.search(r"(?:GPA|CGPA)[:\s]*(\d+\.?\d*)", line, re.IGNORECASE)
             
-            # Header detection: pipe-separated or contains degree keywords or year
-            degree_keywords = r"(?:B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?B\.?A\.?|B\.?Tech\.?|M\.?Tech\.?|Bachelor|Master|Diploma|Associate|Intermediate|Matriculation)"
+            degree_keywords = r"(?:B\.?S\.?|B\.?A\.?|M\.?S\.?|M\.?B\.?A\.?|B\.?Tech\.?|M\.?Tech\.?|Bachelor|Master|Diploma|Associate|Intermediate|Matriculation|Ph\.?D\.?|Doctorate)"
             has_degree_keyword = re.search(degree_keywords, line, re.IGNORECASE)
             has_pipe = "|" in line and not line.startswith("-")
-            has_year = re.search(r"\d{4}", line)  # Just contains a year
+            has_year = re.search(r"\d{4}", line)
             is_header = (date_match and not line.startswith("-")) or (has_degree_keyword and not line.startswith("-")) or (has_pipe and len(line) < 200 and not line.startswith("-")) or (has_year and (has_degree_keyword or has_pipe))
 
-            if is_header and len(line) > 8:
-                # Save previous education entry
+            if is_header and len(line) > 6:
                 if current_edu:
                     education.append(current_edu)
 
-                # Parse education header
                 institution = ""
                 degree = ""
                 field = ""
@@ -416,14 +495,11 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
                     end_date = date_match.group(2)
                     if end_date.lower() in ("present", "current"):
                         is_current_edu = True
-                    # Remove date from line for parsing institution/degree
                     header_text = line[:date_match.start()].strip()
                 else:
                     header_text = line
 
-                # Split by pipe for "Institution | Degree | Field" format
                 parts = [p.strip() for p in header_text.split("|") if p.strip()]
-                
                 if len(parts) >= 1:
                     institution = parts[0]
                 if len(parts) >= 2:
@@ -431,12 +507,9 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
                 if len(parts) >= 3:
                     field = parts[2]
                 
-                # If only one part and it contains both institution and degree keywords, try to split
                 if len(parts) == 1 and re.search(degree_keywords, institution, re.IGNORECASE):
-                    # Look for common patterns like "Institution, Degree" or "Institution - Degree"
                     comma_split = institution.split(",")
                     dash_split = institution.split(" - ")
-                    
                     if len(comma_split) == 2:
                         institution = comma_split[0].strip()
                         degree = comma_split[1].strip()
@@ -444,11 +517,9 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
                         institution = dash_split[0].strip()
                         degree = dash_split[1].strip()
                 
-                # If degree not found yet but next line looks like degree info, grab it
                 if not degree and i + 1 < len(edu_lines):
                     next_line = edu_lines[i + 1]
                     if re.search(degree_keywords, next_line, re.IGNORECASE) and not re.search(r"^\d{4}", next_line):
-                        # Next line looks like degree info
                         degree_parts = next_line.split("|")
                         degree = degree_parts[0].strip()
                         if len(degree_parts) > 1:
@@ -456,7 +527,7 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
 
                 current_edu = {
                     "institution": institution,
-                    "degree": degree,
+                    "degree": degree or "Degree",
                     "field_of_study": field,
                     "start_date": start_date,
                     "end_date": end_date,
@@ -465,10 +536,8 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
                     "description": "",
                 }
             elif current_edu:
-                # Handle continuation lines for current education entry
                 if gpa_match and not current_edu.get("gpa"):
                     current_edu["gpa"] = gpa_match.group(1)
-                # Check if this line looks like degree info (for next-line degree pattern)
                 if not current_edu.get("degree") and re.search(degree_keywords, line, re.IGNORECASE):
                     degree_parts = line.split("|")
                     current_edu["degree"] = degree_parts[0].strip()
@@ -477,6 +546,126 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
 
         if current_edu:
             education.append(current_edu)
+
+    # ── Projects Extraction (format-agnostic) ──
+    projects = []
+    proj_section_pattern = re.compile(
+        r"(?:KEY\s+PROJECTS|PERSONAL\s+PROJECTS|ACADEMIC\s+PROJECTS|PORTFOLIO\s+PROJECTS|SELECTED\s+PROJECTS|PROJECTS)\s*\n([\s\S]*?)(?=\n\s*(?:EXPERIENCE|EDUCATION|SKILLS|CERTIFICATIONS|PUBLICATIONS|RESEARCH|AWARDS|INTERESTS|REFERENCES|CORE\s+SKILLS|TECHNICAL\s+SKILLS|TRAINING|OPEN-SOURCE|LANGUAGES|HOBBIES|$))",
+        re.IGNORECASE
+    )
+    proj_match = proj_section_pattern.search(raw_text)
+    if proj_match:
+        proj_text = proj_match.group(1).strip()
+        proj_lines = proj_text.splitlines()
+
+        current_proj = None
+        current_proj_bullets = []
+
+        for line in proj_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            is_bullet = stripped.startswith("-") or stripped.startswith("•") or stripped.startswith("*") or stripped.startswith("–")
+            
+            # Check for project header: non-bullet, short to medium length, may have tech stack or links
+            is_proj_header = not is_bullet and len(stripped) < 140 and not stripped.lower().startswith("tech") and not stripped.lower().startswith("built with")
+
+            if is_proj_header and len(stripped) > 3:
+                if current_proj:
+                    current_proj["achievements"] = current_proj_bullets
+                    if not current_proj["description"] and current_proj_bullets:
+                        current_proj["description"] = " ".join(current_proj_bullets[:2])
+                    projects.append(current_proj)
+                    current_proj_bullets = []
+
+                proj_name = stripped
+                tech_list = []
+                github_url = ""
+                proj_url = ""
+
+                # Extract technologies from header if formatted like "Project Name | Python, FastAPI, React"
+                if "|" in stripped:
+                    parts = [p.strip() for p in stripped.split("|") if p.strip()]
+                    proj_name = parts[0]
+                    if len(parts) > 1:
+                        raw_techs = parts[1]
+                        tech_list = [t.strip() for t in re.split(r"[,;/]", raw_techs) if t.strip()]
+
+                # Extract links if present
+                gh_match = re.search(r"github\.com/[^\s)]+", stripped, re.I)
+                if gh_match:
+                    github_url = f"https://{gh_match.group(0)}"
+                url_match = re.search(r"https?://[^\s)]+", stripped, re.I)
+                if url_match and "github.com" not in url_match.group(0):
+                    proj_url = url_match.group(0)
+
+                current_proj = {
+                    "name": proj_name,
+                    "description": "",
+                    "technologies": tech_list,
+                    "project_url": proj_url,
+                    "github_url": github_url,
+                    "achievements": [],
+                }
+            elif current_proj:
+                # Check for tech stack line like "Technologies: Python, React, PostgreSQL"
+                tech_match = re.search(r"(?:Tech(?:nologies)?|Stack|Built with)[:\s]+(.+)", stripped, re.I)
+                if tech_match:
+                    raw_techs = tech_match.group(1)
+                    extracted_techs = [t.strip() for t in re.split(r"[,;|/]", raw_techs) if t.strip()]
+                    current_proj["technologies"].extend(extracted_techs)
+                elif is_bullet:
+                    clean_bullet = re.sub(r"^[-•*–\s]+", "", stripped).strip()
+                    if len(clean_bullet) > 8:
+                        current_proj_bullets.append(clean_bullet)
+                elif len(stripped) > 20 and not current_proj["description"]:
+                    current_proj["description"] = stripped
+
+        if current_proj:
+            current_proj["achievements"] = current_proj_bullets
+            if not current_proj["description"] and current_proj_bullets:
+                current_proj["description"] = " ".join(current_proj_bullets[:2])
+            projects.append(current_proj)
+
+    # ── Certifications Extraction ──
+    certifications = []
+    cert_section_pattern = re.compile(
+        r"(?:CERTIFICATIONS|LICENSES\s+&\s+CERTIFICATIONS|CERTIFICATES|COURSES\s+&\s+CERTIFICATIONS)\s*\n([\s\S]*?)(?=\n\s*(?:EXPERIENCE|EDUCATION|SKILLS|PROJECTS|PUBLICATIONS|RESEARCH|AWARDS|INTERESTS|REFERENCES|CORE\s+SKILLS|TECHNICAL\s+SKILLS|TRAINING|OPEN-SOURCE|LANGUAGES|HOBBIES|$))",
+        re.IGNORECASE
+    )
+    cert_match = cert_section_pattern.search(raw_text)
+    if cert_match:
+        cert_text = cert_match.group(1).strip()
+        for line in cert_text.splitlines():
+            stripped = re.sub(r"^[-•*–\s]+", "", line).strip()
+            if not stripped or len(stripped) < 4:
+                continue
+            
+            date_match = re.search(r"(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{4}|\d{4})", stripped, re.I)
+            issue_date = date_match.group(1) if date_match else ""
+            
+            cert_name = stripped
+            issuer = ""
+            if "|" in stripped:
+                parts = [p.strip() for p in stripped.split("|") if p.strip()]
+                cert_name = parts[0]
+                if len(parts) > 1:
+                    issuer = parts[1]
+            elif " - " in stripped:
+                parts = [p.strip() for p in stripped.split(" - ") if p.strip()]
+                cert_name = parts[0]
+                if len(parts) > 1:
+                    issuer = parts[1]
+
+            certifications.append({
+                "name": cert_name,
+                "issuing_organization": issuer or "Accredited Organization",
+                "issue_date": issue_date,
+                "expiration_date": "",
+                "credential_id": "",
+                "credential_url": "",
+            })
 
     # ── Skills Extraction (from dedicated section + full text scan) ──
     common_skills = [
@@ -489,12 +678,11 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
         "Bootstrap", "jQuery", "PHP", "Firebase", "MSSQL", "XML", "UML",
         "Java Swing", "Jupyter", "VS Code", "GitHub", "Cursor", "PyCharm",
         "Agile", "Scrum", "OOP", "Data Structures", "Algorithms", "Pandas", "NumPy", "Scikit-learn",
-        "Jupyter", "Google Colab", "Keras", "OpenCV", "FAISS", "LangChain", "Hugging Face",
+        "Google Colab", "Keras", "OpenCV", "LangChain", "Hugging Face",
     ]
     
     detected_skills = []
     
-    # First, try to extract from SKILLS or CORE SKILLS section
     skills_section_pattern = re.compile(
         r"(?:CORE\s+SKILLS|TECHNICAL\s+SKILLS|SKILLS|TECHNICAL\s+PROFICIENCIES)\s*\n([\s\S]*?)(?=\n\s*(?:EXPERIENCE|EDUCATION|PROJECTS|CERTIFICATIONS|LANGUAGES|HOBBIES|REFERENCES|$))",
         re.IGNORECASE
@@ -503,72 +691,26 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
     
     if skills_match:
         skills_text = skills_match.group(1)
-        # Extract skills from dedicated section (look for comma/semicolon separated skills)
-        # Remove bullets and clean up
         skills_text = re.sub(r"^[-•*\s]+", "", skills_text, flags=re.MULTILINE)
-        # Split by common delimiters
         skill_items = re.split(r"[,;|]|\s+and\s+", skills_text, flags=re.IGNORECASE)
         for item in skill_items:
             cleaned = item.strip()
             if cleaned and len(cleaned) > 1 and len(cleaned) < 100:
-                # Check if this item is in our common_skills list
                 for skill in common_skills:
                     if skill.lower() in cleaned.lower():
                         if skill not in detected_skills:
                             detected_skills.append(skill)
                         break
-                # Also add custom skills not in the predefined list
                 if len(detected_skills) < 50 and cleaned not in detected_skills and len(cleaned) > 2:
-                    # Only add if it looks like a valid skill (contains letters/digits)
                     if re.search(r"[a-zA-Z0-9]{2,}", cleaned):
-                        # Check if not already added (case-insensitive)
                         if not any(s.lower() == cleaned.lower() for s in detected_skills):
                             detected_skills.append(cleaned)
     
-    # Fall back to scanning full text for common skills
     if len(detected_skills) < 10:
         for skill in common_skills:
             if re.search(r"\b" + re.escape(skill) + r"\b", raw_text, re.IGNORECASE):
                 if skill not in detected_skills:
                     detected_skills.append(skill)
-
-    # Prioritize skills based on job_title if provided
-    if job_title and detected_skills:
-        def skill_relevance_score(skill: str, job_title: str) -> int:
-            """Score how relevant a skill is to the target job_title. Higher score = more relevant."""
-            skill_lower = skill.lower()
-            job_title_lower = job_title.lower()
-            
-            # Exact match in job title gets highest score
-            if skill_lower in job_title_lower:
-                return 1000
-            
-            # Role-based relevance scoring (role keywords map to common tech stacks)
-            role_skill_map = {
-                "react|frontend|ui": ["react", "javascript", "typescript", "html", "css", "next.js", "vue", "angular"],
-                "python|backend|api": ["python", "fastapi", "django", "flask", "sqlalchemy", "sql"],
-                "data science|ml|ai|machine learning": ["python", "machine learning", "deep learning", "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy", "nlp", "llm", "rag"],
-                "devops|infrastructure|cloud": ["docker", "kubernetes", "aws", "gcp", "azure", "ci/cd", "jenkins", "terraform", "linux"],
-                "full-stack|fullstack": ["javascript", "typescript", "react", "node.js", "python", "sql", "postgresql", "mongodb", "docker"],
-                "database|sql|dba": ["sql", "postgresql", "mysql", "mongodb", "redis", "oracle", "sqlalchemy"],
-                "mobile|ios|android": ["swift", "kotlin", "react native", "flutter", "objective-c", "java"],
-                "devops engineer": ["docker", "kubernetes", "aws", "gcp", "azure", "terraform", "ci/cd", "linux", "python"],
-            }
-            
-            score = 0
-            for role_pattern, related_skills in role_skill_map.items():
-                if re.search(role_pattern, job_title_lower):
-                    if any(s in skill_lower for s in related_skills):
-                        score += 100
-            
-            return score
-        
-        # Sort skills by relevance to job_title (descending)
-        try:
-            detected_skills.sort(key=lambda s: skill_relevance_score(s, job_title), reverse=True)
-            logger.debug(f"==> [CV Parser] Prioritized skills for role '{job_title}': {detected_skills[:5]}")
-        except Exception as e:
-            logger.warning(f"==> [CV Parser] Failed to prioritize skills: {e}")
 
     return {
         "personal_info": {
@@ -585,7 +727,7 @@ def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
         "experience": experiences,
         "education": education,
         "skills": detected_skills or ["Python", "FastAPI", "SQL", "Git"],
-        "projects": [],
-        "certifications": [],
+        "projects": projects,
+        "certifications": certifications,
     }
 

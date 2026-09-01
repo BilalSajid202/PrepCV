@@ -682,16 +682,10 @@ async def extract_cv_with_hf(
         logger.warning("Raw text too short for AI extraction.")
         return None
 
-    system_instruction = f"""You are an expert CV/Resume parser. Your task is to extract ALL structured information from raw resume text into a precise JSON object.
+    system_instruction = f"""You are an expert AI Resume/CV parser. You are given a candidate's resume in clean Markdown (.md) format.
+Your task is to analyze the Markdown structure (# Sections, ## Items, - Bullets, | Tables) and extract ALL information into a single, comprehensive JSON object.
 
-The raw text below was extracted from a PDF or Word document. It may contain layout artifacts such as:
-- Pipe characters (|) from table rows
-- Extra whitespace from multi-column layouts
-- Section headings in UPPERCASE or with underlines
-- Bullet characters (-, *, •)
-- Dates in various formats (e.g., "Dec 2024 – Present", "06/2020", "2021 -- 2023")
-
-EXTRACTION RULES:
+EXTRACTION INSTRUCTIONS:
 
 1. PERSONAL INFORMATION:
    - Extract the candidate's FULL NAME (usually the largest/first text on the resume).
@@ -700,41 +694,41 @@ EXTRACTION RULES:
    - Extract LinkedIn URL, GitHub URL, and portfolio/website URL if present.
    - For "summary": Extract the PROFESSIONAL SUMMARY paragraph from the resume. This is typically a 2-4 sentence paragraph describing the candidate's background. Do NOT put contact info here.
 
-2. WORK EXPERIENCE - CRITICAL:
-   - Extract EVERY individual work experience entry separately. Each entry MUST have:
-     * "company": The actual company/organization name (e.g., "OmniClouds", "Superior University", "Google")
-     * "position": The actual job title (e.g., "Artificial Intelligence Developer", "Junior Lecturer", "Machine Learning Engineer")
-     * "location": Job location if mentioned (e.g., "Remote", "Lahore, Pakistan")
-     * "employment_type": "Full-time", "Part-time", "Contract", "Contractual", "Remote", "Internship" — infer from context
-     * "start_date": Actual start date (normalize to format like "Dec 2024", "Nov 2023", "Apr 2023")
+2. WORK EXPERIENCE - FORMAT AGNOSTIC & CRITICAL:
+   - Extract EVERY individual job/role listed anywhere on the resume.
+   - Resumes format jobs in diverse ways (e.g. "Company | Position", "Position at Company", "Company\nPosition", "Position - Company (Dates)", tables, multi-column).
+   - For each role, extract:
+     * "company": The actual company/organization/university name (e.g., "OmniClouds", "Superior University", "Google")
+     * "position": The actual job title (e.g., "Artificial Intelligence Developer", "Junior Lecturer", "Software Engineer")
+     * "location": Location or "Remote"
+     * "employment_type": "Full-time", "Part-time", "Contract", "Contractual", "Remote", "Internship"
+     * "start_date": Actual start date (e.g. "Dec 2024", "Nov 2023", "2021")
      * "end_date": Actual end date or "Present" if current
-     * "is_current": true if the role is ongoing (end date is "Present" or "Current")
-     * "description": Brief role description if available, otherwise empty string
-     * "achievements": Array of bullet points describing what the candidate did in this role. Extract the ACTUAL bullet points from the resume text.
-   - NEVER merge multiple jobs into one entry. NEVER use placeholder text like "Key Contributor" or "Professional Experience" as company/position names.
-   - If the resume has 4 jobs, you must return 4 experience entries.
+     * "is_current": true if ongoing role
+     * "description": Brief summary of the role
+     * "achievements": Array of bullet points describing the candidate's responsibilities, achievements, and impact in this role.
+   - Extract ALL roles independently. If the resume lists 3, 4, or 5 jobs, return ALL of them as separate items.
 
 3. EDUCATION:
-   - Extract EVERY education entry with real institution names, degrees, fields of study, dates, and GPA if mentioned.
+   - Extract EVERY degree/program with institution, degree name, field of study, dates, and GPA/CGPA.
    - Example: institution="Superior University", degree="Bachelor of Science", field_of_study="Software Engineering", gpa="3.68"
 
 4. SKILLS:
-   - Extract ALL skills mentioned anywhere in the resume — from dedicated skills sections, experience bullets, project descriptions, etc.
-   - Include programming languages, frameworks, tools, databases, platforms, methodologies, and soft skills.
-   - PRIORITIZE skills most relevant to the target role: "{clean_job_title}"
-   - If the target role is provided (e.g., "Full-Stack Developer", "Data Scientist", "DevOps Engineer"), extract skills in this order:
-     1. Technical skills directly relevant to the role (e.g., if role is "React Developer", prioritize React, JavaScript, Next.js)
-     2. Related technical skills (e.g., TypeScript, CSS, Node.js for React Developer)
-     3. General tools and platforms (e.g., Git, Docker, AWS)
-     4. Soft skills (e.g., Communication, Teamwork)
-   - Return as a flat array of strings. Deduplicate. Order by relevance to target role.
-   - NEVER invent skills not mentioned in the resume, but DO extract all skills actually present.
+   - Extract ALL technical and domain skills found in the document (languages, frameworks, tools, libraries, databases).
+   - Return as a flat deduplicated list of strings.
 
-5. PROJECTS:
-   - Extract any projects mentioned with name, description, technologies used, URLs, and key achievements.
+5. PROJECTS - FORMAT AGNOSTIC & CRITICAL:
+   - Extract EVERY project listed in the resume (under "Projects", "Key Projects", "Academic Projects", "Personal Projects", "Portfolio", or other sections).
+   - For each project:
+     * "name": The clear project title (e.g., "PrepCV - AI Resume Platform", "RAG Medical Q&A Bot", "E-Commerce System")
+     * "description": Detailed description of what the project does, key features, and architecture
+     * "technologies": Array of tools and technologies used (e.g., ["Python", "FastAPI", "React", "Docker", "PostgreSQL"])
+     * "project_url": Demo/live URL if mentioned
+     * "github_url": GitHub repository URL if mentioned
+     * "achievements": Array of specific accomplishments, features built, or performance metrics for this project
 
 6. CERTIFICATIONS:
-   - Extract any certifications, courses, or credentials with name, issuing organization, and dates.
+   - Extract all certifications, courses, and licenses with name, issuing organization, and dates.
 
 Target Role Context: "{clean_job_title}"
 If relevant, tailor the professional summary for this role, but NEVER invent fake information.
@@ -800,7 +794,7 @@ Return ONLY valid JSON matching this exact schema:
   ]
 }}"""
 
-    user_payload = f"RAW RESUME TEXT TO EXTRACT FROM:\n\n{clean_text}"
+    user_payload = f"CANDIDATE RESUME (IN CLEAN MARKDOWN .md FORMAT):\n\n{clean_text}"
 
     api_result = await _call_hf_json_api(
         system_instruction=system_instruction,
