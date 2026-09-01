@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_logic.profile import get_user_profile
 from app.business_logic.resume_generator import (
+    delete_resume_by_id,
     generate_ats_resume_content,
     get_resume_by_id,
     get_user_resumes,
@@ -260,6 +261,22 @@ async def update_resume(
         created_at=resume.created_at.isoformat(),
         updated_at=resume.updated_at.isoformat(),
     )
+
+
+@router.delete("/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_resume(
+    resume_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """Delete a resume and all its associated version history."""
+    deleted = await delete_resume_by_id(db, resume_id, current_user.id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Resume not found."
+        )
+    return None
 
 
 @router.post("/{resume_id}/ats-score", response_model=ATSScoreResponse, dependencies=[Depends(require_feature("ats_checker"))])

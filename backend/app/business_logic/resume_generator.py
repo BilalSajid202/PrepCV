@@ -532,3 +532,13 @@ async def get_resume_by_id(db: AsyncSession, resume_id: str, user_id: str) -> Op
     stmt = select(Resume).where(Resume.id == resume_id, Resume.user_id == user_id)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def delete_resume_by_id(db: AsyncSession, resume_id: str, user_id: str) -> bool:
+    """Delete single resume by ID and its versions for user."""
+    resume = await get_resume_by_id(db, resume_id, user_id)
+    if not resume:
+        return False
+    await db.delete(resume)
+    await db.commit()
+    return True

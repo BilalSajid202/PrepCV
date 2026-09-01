@@ -20,6 +20,7 @@ import {
   createResumeVersion,
   restoreResumeVersion,
   compareResumeVersions,
+  deleteResume,
 } from "@/lib/api";
 import {
   Edit3,
@@ -38,6 +39,7 @@ import {
   Split,
   Lightbulb,
   ArrowRight,
+  Trash2,
   TrendingUp,
   TrendingDown,
   X,
@@ -119,6 +121,8 @@ export default function ResumeEditorPage() {
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [aiSuggestion, setAiSuggestion] = useState<{ text: string; explanation?: string } | null>(null);
   const [exportingDocx, setExportingDocx] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [deleting, setDeleting] = useState<boolean>(false);
 
   const loadHtmlPreview = async (id: string, currentContent?: ResumeContent) => {
     try {
@@ -372,6 +376,19 @@ export default function ResumeEditorPage() {
     }
   };
 
+  const handleDeleteResume = async () => {
+    if (!resumeId) return;
+    try {
+      setDeleting(true);
+      await deleteResume(resumeId);
+      router.push("/dashboard");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to delete resume.");
+      setDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
   const getScoreColor = (score: number) => {
     if (score >= 90) return "#16A34A";
     if (score >= 75) return "#2563EB";
@@ -618,6 +635,27 @@ export default function ResumeEditorPage() {
             >
               <FileDown size={14} />
               <span>PDF</span>
+            </button>
+
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              title="Delete this resume"
+              style={{
+                backgroundColor: "#FEF2F2",
+                color: "#DC2626",
+                border: "1px solid #FECACA",
+                padding: "7px 10px",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <Trash2 size={14} />
+              <span className="hide-on-mobile">Delete</span>
             </button>
           </div>
         </header>
@@ -1324,6 +1362,83 @@ export default function ResumeEditorPage() {
                   style={{ padding: "8px 20px", borderRadius: "6px", border: "none", backgroundColor: "#7C3AED", color: "#FFFFFF", fontWeight: 600, cursor: "pointer", fontSize: "13px" }}
                 >
                   Apply Suggestion
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Resume Confirmation Modal */}
+        {showDeleteModal && (
+          <div style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "16px",
+          }}>
+            <div style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "12px",
+              padding: "24px",
+              maxWidth: "420px",
+              width: "100%",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <div style={{ padding: "8px", borderRadius: "50%", backgroundColor: "#FEE2E2", color: "#DC2626" }}>
+                  <Trash2 size={20} />
+                </div>
+                <h3 style={{ fontSize: "17px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                  Delete Resume?
+                </h3>
+              </div>
+              <p style={{ fontSize: "14px", color: "#64748B", margin: "0 0 20px 0", lineHeight: 1.5 }}>
+                Are you sure you want to delete <strong>"{title}"</strong>? This will permanently delete this resume and all its version history.
+              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#475569",
+                    fontSize: "13.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteResume}
+                  disabled={deleting}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "6px",
+                    border: "none",
+                    backgroundColor: "#DC2626",
+                    color: "#FFFFFF",
+                    fontSize: "13.5px",
+                    fontWeight: 600,
+                    cursor: deleting ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {deleting ? "Deleting..." : "Delete Resume"}
                 </button>
               </div>
             </div>

@@ -291,6 +291,12 @@ export async function updateResumeContent(id: string, title: string, content: Re
   });
 }
 
+export async function deleteResume(id: string): Promise<void> {
+  return apiRequest<void>(`/api/resumes/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export async function aiImproveBullet(section: string, text: string, instruction: string): Promise<{ improved_text: string; explanation?: string }> {
   return apiRequest<{ improved_text: string; explanation?: string }>("/api/resumes/ai-improve", {
     method: "POST",

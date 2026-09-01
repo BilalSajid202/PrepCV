@@ -11,6 +11,7 @@ import {
   fetchProfile,
   listUserResumes,
   listInterviewSessions,
+  deleteResume,
 } from "@/lib/api";
 import {
   FilePlus,
@@ -21,6 +22,9 @@ import {
   Sparkles,
   Award,
   Video,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -30,6 +34,9 @@ export default function DashboardPage() {
   const [resumes, setResumes] = useState<ResumeData[]>([]);
   const [sessions, setSessions] = useState<InterviewSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [resumeToDelete, setResumeToDelete] = useState<ResumeData | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -51,6 +58,23 @@ export default function DashboardPage() {
       loadDashboardData();
     }
   }, [user]);
+
+  const handleDeleteResume = async () => {
+    if (!resumeToDelete) return;
+    try {
+      setDeletingId(resumeToDelete.id);
+      await deleteResume(resumeToDelete.id);
+      setResumes((prev) => prev.filter((r) => r.id !== resumeToDelete.id));
+      setFeedbackMsg({ text: `"${resumeToDelete.title}" deleted successfully.`, type: "success" });
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    } catch (err: any) {
+      setFeedbackMsg({ text: err.message || "Failed to delete resume.", type: "error" });
+      setTimeout(() => setFeedbackMsg(null), 4000);
+    } finally {
+      setDeletingId(null);
+      setResumeToDelete(null);
+    }
+  };
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -95,6 +119,26 @@ export default function DashboardPage() {
     <ProtectedRoute>
       <SidebarLayout>
         <div style={{ maxWidth: "860px" }}>
+
+          {/* Feedback Toast */}
+          {feedbackMsg && (
+            <div style={{
+              padding: "12px 16px",
+              marginBottom: "20px",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "14px",
+              fontWeight: 500,
+              backgroundColor: feedbackMsg.type === "success" ? "#F0FDF4" : "#FEF2F2",
+              border: `1px solid ${feedbackMsg.type === "success" ? "#86EFAC" : "#FCA5A5"}`,
+              color: feedbackMsg.type === "success" ? "#166534" : "#991B1B",
+            }}>
+              {feedbackMsg.type === "success" ? <CheckCircle2 size={16} color="#16A34A" /> : <AlertTriangle size={16} color="#DC2626" />}
+              <span>{feedbackMsg.text}</span>
+            </div>
+          )}
           
           {/* Greeting Header */}
           <div style={{ marginBottom: "28px" }}>
@@ -226,7 +270,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                         <span style={{
                           backgroundColor: badgeBg,
                           color: badgeColor,
@@ -238,6 +282,39 @@ export default function DashboardPage() {
                         }}>
                           {hasScore ? `${score}%` : "Not Scored"}
                         </span>
+                        
+                        {/* Delete Resume Button */}
+                        <button
+                          type="button"
+                          title="Delete resume"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setResumeToDelete(resume);
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#94A3B8",
+                            cursor: "pointer",
+                            padding: "6px",
+                            borderRadius: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.color = "#EF4444";
+                            e.currentTarget.style.backgroundColor = "#FEE2E2";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.color = "#94A3B8";
+                            e.currentTarget.style.backgroundColor = "transparent";
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+
                         <ArrowRight size={16} color="#94A3B8" />
                       </div>
                     </div>
@@ -246,6 +323,83 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Delete Confirmation Modal */}
+          {resumeToDelete && (
+            <div style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "16px",
+            }}>
+              <div style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "12px",
+                padding: "24px",
+                maxWidth: "420px",
+                width: "100%",
+                boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{ padding: "8px", borderRadius: "50%", backgroundColor: "#FEE2E2", color: "#DC2626" }}>
+                    <Trash2 size={20} />
+                  </div>
+                  <h3 style={{ fontSize: "17px", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    Delete Resume?
+                  </h3>
+                </div>
+                <p style={{ fontSize: "14px", color: "#64748B", margin: "0 0 20px 0", lineHeight: 1.5 }}>
+                  Are you sure you want to delete <strong>"{resumeToDelete.title}"</strong>? This will permanently remove the resume and all its version history.
+                </p>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setResumeToDelete(null)}
+                    disabled={deletingId !== null}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "6px",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#475569",
+                      fontSize: "13.5px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteResume}
+                    disabled={deletingId !== null}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "6px",
+                      border: "none",
+                      backgroundColor: "#DC2626",
+                      color: "#FFFFFF",
+                      fontSize: "13.5px",
+                      fontWeight: 600,
+                      cursor: deletingId ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    {deletingId ? "Deleting..." : "Delete Resume"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons Row */}
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
