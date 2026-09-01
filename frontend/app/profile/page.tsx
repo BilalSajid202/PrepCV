@@ -776,6 +776,7 @@ function ProfilePageContent() {
                     </div>
                   </div>
                 ) : (
+                  <div>
                     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                       <label style={{
                         backgroundColor: "#2563EB",
