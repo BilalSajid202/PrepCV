@@ -442,7 +442,21 @@
   {% endif %}
 
   <!-- ================= SKILLS ================= -->
-  {% if skills and skills|length > 0 %}
+  {% if (technical_skills and technical_skills|length > 0) or (soft_skills and soft_skills|length > 0) %}
+  <section>
+    <h2 class="section-title">Skills</h2>
+    {% if technical_skills and technical_skills|length > 0 %}
+    <div class="skills-row">
+      <span class="cat">Technical Proficiencies:</span> {{ technical_skills|join(', ') }}
+    </div>
+    {% endif %}
+    {% if soft_skills and soft_skills|length > 0 %}
+    <div class="skills-row">
+      <span class="cat">Professional Skills:</span> {{ soft_skills|join(', ') }}
+    </div>
+    {% endif %}
+  </section>
+  {% elif skills and skills|length > 0 %}
   <section>
     <h2 class="section-title">Skills</h2>
     <div class="skills-row">

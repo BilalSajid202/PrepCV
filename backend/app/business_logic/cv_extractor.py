@@ -137,7 +137,7 @@ async def parse_cv_text_with_llm(raw_text: str, job_title: str = "", user_id: Op
 
     # FALLBACK: Improved heuristic parser (only when AI is unavailable)
     logger.info(f"==> [CV Parser] Using heuristic fallback parser (method: {extraction_method}).")
-    result = fallback_cv_parser(raw_text)
+    result = fallback_cv_parser(raw_text, job_title=job_title)
     
     # Log fallback usage to track that extraction happened
     try:
@@ -160,11 +160,48 @@ async def parse_cv_text_with_llm(raw_text: str, job_title: str = "", user_id: Op
     return result
 
 
-def fallback_cv_parser(raw_text: str) -> Dict[str, Any]:
+# Common soft skills to filter out from technical proficiencies
+SOFT_SKILLS_KEYWORDS = {
+    "communication", "interpersonal", "teamwork", "collaboration", "organizational",
+    "time management", "problem-solving", "attention to detail", "leadership",
+    "project management", "critical thinking", "analytical", "creative thinking",
+    "adaptability", "flexibility", "reliability", "accountability", "initiative",
+    "presentation", "public speaking", "negotiation", "conflict resolution",
+    "customer service", "client management", "stakeholder management", "ms office",
+    "word", "excel", "powerpoint", "event coordination", "event management",
+    "recruitment", "recruiting", "hiring", "onboarding", "training",
+    "mentoring", "coaching", "employee relations", "hr", "human resources",
+    "networking", "relationship building", "multitasking", "prioritization"
+}
+
+def categorize_skills(skills_list: list[str]) -> tuple[list[str], list[str]]:
+    """Separate technical skills from soft/professional skills."""
+    technical_skills = []
+    soft_skills = []
+    
+    for skill in skills_list:
+        skill_lower = skill.lower().strip()
+        # Check if skill is in soft skills keywords
+        is_soft_skill = False
+        for soft_keyword in SOFT_SKILLS_KEYWORDS:
+            if soft_keyword in skill_lower or skill_lower in soft_keyword:
+                is_soft_skill = True
+                break
+        
+        if is_soft_skill:
+            soft_skills.append(skill)
+        else:
+            technical_skills.append(skill)
+    
+    return technical_skills, soft_skills
+
+
+def fallback_cv_parser(raw_text: str, job_title: str = "") -> Dict[str, Any]:
     """
     Improved heuristic parser that extracts structured data from raw CV text.
     Used ONLY as a last-resort fallback when all AI extraction paths fail.
     Attempts section-aware parsing to extract multiple experience/education entries.
+    Optionally prioritizes skills relevant to the target job_title if provided.
     """
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
 
@@ -494,6 +531,44 @@ def fallback_cv_parser(raw_text: str) -> Dict[str, Any]:
             if re.search(r"\b" + re.escape(skill) + r"\b", raw_text, re.IGNORECASE):
                 if skill not in detected_skills:
                     detected_skills.append(skill)
+
+    # Prioritize skills based on job_title if provided
+    if job_title and detected_skills:
+        def skill_relevance_score(skill: str, job_title: str) -> int:
+            """Score how relevant a skill is to the target job_title. Higher score = more relevant."""
+            skill_lower = skill.lower()
+            job_title_lower = job_title.lower()
+            
+            # Exact match in job title gets highest score
+            if skill_lower in job_title_lower:
+                return 1000
+            
+            # Role-based relevance scoring (role keywords map to common tech stacks)
+            role_skill_map = {
+                "react|frontend|ui": ["react", "javascript", "typescript", "html", "css", "next.js", "vue", "angular"],
+                "python|backend|api": ["python", "fastapi", "django", "flask", "sqlalchemy", "sql"],
+                "data science|ml|ai|machine learning": ["python", "machine learning", "deep learning", "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy", "nlp", "llm", "rag"],
+                "devops|infrastructure|cloud": ["docker", "kubernetes", "aws", "gcp", "azure", "ci/cd", "jenkins", "terraform", "linux"],
+                "full-stack|fullstack": ["javascript", "typescript", "react", "node.js", "python", "sql", "postgresql", "mongodb", "docker"],
+                "database|sql|dba": ["sql", "postgresql", "mysql", "mongodb", "redis", "oracle", "sqlalchemy"],
+                "mobile|ios|android": ["swift", "kotlin", "react native", "flutter", "objective-c", "java"],
+                "devops engineer": ["docker", "kubernetes", "aws", "gcp", "azure", "terraform", "ci/cd", "linux", "python"],
+            }
+            
+            score = 0
+            for role_pattern, related_skills in role_skill_map.items():
+                if re.search(role_pattern, job_title_lower):
+                    if any(s in skill_lower for s in related_skills):
+                        score += 100
+            
+            return score
+        
+        # Sort skills by relevance to job_title (descending)
+        try:
+            detected_skills.sort(key=lambda s: skill_relevance_score(s, job_title), reverse=True)
+            logger.debug(f"==> [CV Parser] Prioritized skills for role '{job_title}': {detected_skills[:5]}")
+        except Exception as e:
+            logger.warning(f"==> [CV Parser] Failed to prioritize skills: {e}")
 
     return {
         "personal_info": {

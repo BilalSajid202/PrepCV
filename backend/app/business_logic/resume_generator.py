@@ -146,6 +146,11 @@ def render_resume_html(data: dict) -> str:
     """Render resume data into dynamic ATS-safe HTML using Jinja2 and content-scaled CSS."""
     data = _safe_defaults(data)
     scale = pick_scale(data)
+    
+    # Separate technical from soft skills
+    from app.business_logic.cv_extractor import categorize_skills
+    all_skills = data["skills"]
+    technical_skills, soft_skills = categorize_skills(all_skills)
 
     env = Environment(
         loader=FileSystemLoader(str(TEMPLATE_DIR)),
@@ -160,7 +165,9 @@ def render_resume_html(data: dict) -> str:
         personal_info=data["personal_info"],
         experience=data["experience"],
         education=data["education"],
-        skills=data["skills"],
+        technical_skills=technical_skills,
+        soft_skills=soft_skills,
+        skills=all_skills,  # Keep for backward compatibility
         projects=data["projects"],
         certifications=data["certifications"],
         scale=scale,
@@ -318,16 +325,33 @@ def render_resume_docx(data: dict) -> "io.BytesIO":
                     format_run(r_b, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
 
     # 5. Skills
-    skills = data.get("skills") or []
-    if skills:
+    all_skills = data.get("skills") or []
+    if all_skills:
         add_section_heading("Skills")
-        sk_p = doc.add_paragraph()
-        sk_p.paragraph_format.space_before = Pt(2)
-        sk_p.paragraph_format.space_after = Pt(6)
-        r_pre = sk_p.add_run("Technical Proficiencies: ")
-        format_run(r_pre, font_name="Calibri", size_pt=9.5, bold=True, color_rgb=(15, 23, 42))
-        r_sk = sk_p.add_run(", ".join(skills))
-        format_run(r_sk, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
+        
+        # Separate technical from soft skills
+        from app.business_logic.cv_extractor import categorize_skills
+        technical_skills, soft_skills = categorize_skills(all_skills)
+        
+        # Display technical skills
+        if technical_skills:
+            sk_p = doc.add_paragraph()
+            sk_p.paragraph_format.space_before = Pt(2)
+            sk_p.paragraph_format.space_after = Pt(2)
+            r_pre = sk_p.add_run("Technical Proficiencies: ")
+            format_run(r_pre, font_name="Calibri", size_pt=9.5, bold=True, color_rgb=(15, 23, 42))
+            r_sk = sk_p.add_run(", ".join(technical_skills))
+            format_run(r_sk, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
+        
+        # Display soft skills
+        if soft_skills:
+            soft_p = doc.add_paragraph()
+            soft_p.paragraph_format.space_before = Pt(1)
+            soft_p.paragraph_format.space_after = Pt(6)
+            r_soft_pre = soft_p.add_run("Professional Skills: ")
+            format_run(r_soft_pre, font_name="Calibri", size_pt=9.5, bold=True, color_rgb=(15, 23, 42))
+            r_soft = soft_p.add_run(", ".join(soft_skills))
+            format_run(r_soft, font_name="Calibri", size_pt=9.5, color_rgb=(51, 65, 85))
 
     # 6. Education
     education = data.get("education") or []

@@ -721,7 +721,14 @@ EXTRACTION RULES:
 4. SKILLS:
    - Extract ALL skills mentioned anywhere in the resume — from dedicated skills sections, experience bullets, project descriptions, etc.
    - Include programming languages, frameworks, tools, databases, platforms, methodologies, and soft skills.
-   - Return as a flat array of strings. Deduplicate.
+   - PRIORITIZE skills most relevant to the target role: "{clean_job_title}"
+   - If the target role is provided (e.g., "Full-Stack Developer", "Data Scientist", "DevOps Engineer"), extract skills in this order:
+     1. Technical skills directly relevant to the role (e.g., if role is "React Developer", prioritize React, JavaScript, Next.js)
+     2. Related technical skills (e.g., TypeScript, CSS, Node.js for React Developer)
+     3. General tools and platforms (e.g., Git, Docker, AWS)
+     4. Soft skills (e.g., Communication, Teamwork)
+   - Return as a flat array of strings. Deduplicate. Order by relevance to target role.
+   - NEVER invent skills not mentioned in the resume, but DO extract all skills actually present.
 
 5. PROJECTS:
    - Extract any projects mentioned with name, description, technologies used, URLs, and key achievements.
