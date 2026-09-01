@@ -5,6 +5,14 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: prepcv-postgres
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
 
   - type: web
     name: prepcv-frontend
@@ -15,6 +23,10 @@ services:
     envVars:
       - key: PORT
         value: 3000
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_API_URL
+        value: https://prepcv-backend.onrender.com
 
 databases:
   - name: prepcv-postgres
