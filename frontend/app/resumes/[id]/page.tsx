@@ -326,16 +326,128 @@ export default function ResumeEditorPage() {
     } else if (improvingIndex.type === "bullet" && improvingIndex.expIdx !== undefined && improvingIndex.bulletIdx !== undefined) {
       const { expIdx, bulletIdx } = improvingIndex;
       setContent((prev) => {
-        const updatedExp = [...prev.experience];
+        const updatedExp = [...(prev.experience || [])];
         const bullets = [...(updatedExp[expIdx].achievements || [])];
         bullets[bulletIdx] = aiSuggestion.text;
         updatedExp[expIdx] = { ...updatedExp[expIdx], achievements: bullets };
         return { ...prev, experience: updatedExp };
       });
+    } else if (improvingIndex.type === "project_bullet" && improvingIndex.expIdx !== undefined && improvingIndex.bulletIdx !== undefined) {
+      const { expIdx: projIdx, bulletIdx } = improvingIndex;
+      setContent((prev) => {
+        const updatedProj = [...(prev.projects || [])];
+        const bullets = [...(updatedProj[projIdx].achievements || [])];
+        bullets[bulletIdx] = aiSuggestion.text;
+        updatedProj[projIdx] = { ...updatedProj[projIdx], achievements: bullets };
+        return { ...prev, projects: updatedProj };
+      });
+    } else if (improvingIndex.type === "project_desc" && improvingIndex.expIdx !== undefined) {
+      const { expIdx: projIdx } = improvingIndex;
+      setContent((prev) => {
+        const updatedProj = [...(prev.projects || [])];
+        updatedProj[projIdx] = { ...updatedProj[projIdx], description: aiSuggestion.text };
+        return { ...prev, projects: updatedProj };
+      });
     }
 
     setAiSuggestion(null);
     setImprovingIndex(null);
+  };
+
+  // Helper methods for Projects
+  const addProjectItem = () => {
+    setContent((prev) => ({
+      ...prev,
+      projects: [
+        ...(prev.projects || []),
+        {
+          name: "New Project",
+          description: "",
+          technologies: [],
+          project_url: "",
+          github_url: "",
+          achievements: ["Developed core architecture and delivered functional demo."]
+        }
+      ]
+    }));
+  };
+
+  const updateProjectField = (idx: number, field: string, val: any) => {
+    setContent((prev) => {
+      const updated = [...(prev.projects || [])];
+      updated[idx] = { ...updated[idx], [field]: val };
+      return { ...prev, projects: updated };
+    });
+  };
+
+  const removeProjectItem = (idx: number) => {
+    setContent((prev) => ({
+      ...prev,
+      projects: (prev.projects || []).filter((_, i) => i !== idx)
+    }));
+  };
+
+  const addProjectBullet = (projIdx: number) => {
+    setContent((prev) => {
+      const updated = [...(prev.projects || [])];
+      const bullets = [...(updated[projIdx].achievements || []), "Implemented scalable feature with high performance."];
+      updated[projIdx] = { ...updated[projIdx], achievements: bullets };
+      return { ...prev, projects: updated };
+    });
+  };
+
+  const updateProjectBullet = (projIdx: number, bulletIdx: number, val: string) => {
+    setContent((prev) => {
+      const updated = [...(prev.projects || [])];
+      const bullets = [...(updated[projIdx].achievements || [])];
+      bullets[bulletIdx] = val;
+      updated[projIdx] = { ...updated[projIdx], achievements: bullets };
+      return { ...prev, projects: updated };
+    });
+  };
+
+  const removeProjectBullet = (projIdx: number, bulletIdx: number) => {
+    setContent((prev) => {
+      const updated = [...(prev.projects || [])];
+      const bullets = (updated[projIdx].achievements || []).filter((_, i) => i !== bulletIdx);
+      updated[projIdx] = { ...updated[projIdx], achievements: bullets };
+      return { ...prev, projects: updated };
+    });
+  };
+
+  // Helper methods for Education
+  const addEducationItem = () => {
+    setContent((prev) => ({
+      ...prev,
+      education: [
+        ...(prev.education || []),
+        {
+          institution: "University / Institution Name",
+          degree: "Bachelor of Science",
+          field_of_study: "Computer Science",
+          start_date: "2020",
+          end_date: "2024",
+          is_current: false,
+          gpa: "",
+          description: ""
+        }
+      ]
+    }));
+  };
+
+  const updateEducationField = (idx: number, field: string, val: any) => {
+    setContent((prev) => {
+      const updated = [...(prev.education || [])];
+      updated[idx] = { ...updated[idx], [field]: val };
+      return { ...prev, education: updated };
+    });
+  };
+
+  const removeEducationItem = (idx: number) => {
+    setContent((prev) => ({
+      ...prev,
+      education: (prev.education || []).filter((_, i) => i !== idx)
+    }));
   };
 
   const handleDownloadHtml = () => {
@@ -818,6 +930,210 @@ export default function ResumeEditorPage() {
                     <span>Add</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Projects Section */}
+              <div style={{ border: "1px solid #E2E8F0", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>
+                    Projects ({content.projects?.length || 0})
+                  </span>
+                  <button
+                    onClick={addProjectItem}
+                    style={{ fontSize: "12px", color: "#2563EB", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", padding: "4px 10px", borderRadius: "4px", cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Plus size={13} />
+                    <span>Add Project</span>
+                  </button>
+                </div>
+
+                {(!content.projects || content.projects.length === 0) ? (
+                  <p style={{ color: "#94A3B8", fontSize: "12px", margin: 0 }}>No projects added yet.</p>
+                ) : (
+                  content.projects.map((proj, projIdx) => (
+                    <div key={projIdx} style={{ marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #F1F5F9" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <input
+                          type="text"
+                          value={proj.name}
+                          placeholder="Project Name"
+                          onChange={(e) => updateProjectField(projIdx, "name", e.target.value)}
+                          style={{ flex: 1, padding: "6px 10px", borderRadius: "4px", border: "1px solid #CBD5E1", fontSize: "12.5px", fontWeight: 600, color: "#0F172A" }}
+                        />
+                        <button
+                          onClick={() => removeProjectItem(projIdx)}
+                          style={{ border: "none", background: "none", color: "#EF4444", cursor: "pointer", padding: "4px" }}
+                          title="Delete Project"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      {/* Technologies */}
+                      <input
+                        type="text"
+                        value={Array.isArray(proj.technologies) ? proj.technologies.join(", ") : proj.technologies || ""}
+                        placeholder="Technologies (e.g. Python, FastAPI, React)"
+                        onChange={(e) => {
+                          const techs = e.target.value.split(",").map((t) => t.trim()).filter(Boolean);
+                          updateProjectField(projIdx, "technologies", techs);
+                        }}
+                        style={{ width: "100%", padding: "5px 8px", borderRadius: "4px", border: "1px solid #E2E8F0", fontSize: "11.5px", color: "#64748B", marginBottom: "6px", boxSizing: "border-box" }}
+                      />
+
+                      {/* URLs */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "6px" }}>
+                        <input
+                          type="text"
+                          value={proj.project_url || ""}
+                          placeholder="Demo / Live URL"
+                          onChange={(e) => updateProjectField(projIdx, "project_url", e.target.value)}
+                          style={{ width: "100%", padding: "5px 8px", borderRadius: "4px", border: "1px solid #E2E8F0", fontSize: "11.5px", boxSizing: "border-box" }}
+                        />
+                        <input
+                          type="text"
+                          value={proj.github_url || ""}
+                          placeholder="GitHub URL"
+                          onChange={(e) => updateProjectField(projIdx, "github_url", e.target.value)}
+                          style={{ width: "100%", padding: "5px 8px", borderRadius: "4px", border: "1px solid #E2E8F0", fontSize: "11.5px", boxSizing: "border-box" }}
+                        />
+                      </div>
+
+                      {/* Description / Summary */}
+                      <div style={{ position: "relative", marginBottom: "8px" }}>
+                        <textarea
+                          rows={2}
+                          value={proj.description || ""}
+                          placeholder="Brief project summary / architecture..."
+                          onChange={(e) => updateProjectField(projIdx, "description", e.target.value)}
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: "4px", border: "1px solid #CBD5E1", fontSize: "12px", boxSizing: "border-box" }}
+                        />
+                        {proj.description && (
+                          <button
+                            onClick={() => handleAiImproveBullet("project_desc", proj.description, "Make concise, technical, and impact-driven", projIdx)}
+                            style={{ position: "absolute", right: "6px", bottom: "8px", fontSize: "10px", color: "#7C3AED", backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", padding: "2px 6px", borderRadius: "3px", cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "2px" }}
+                          >
+                            <Sparkles size={10} />
+                            <span>Improve</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Achievements / Bullets */}
+                      {proj.achievements?.map((b, bIdx) => (
+                        <div key={bIdx} style={{ display: "flex", gap: "6px", marginBottom: "4px" }}>
+                          <input
+                            type="text"
+                            value={b}
+                            onChange={(e) => updateProjectBullet(projIdx, bIdx, e.target.value)}
+                            style={{ flex: 1, padding: "5px 8px", borderRadius: "4px", border: "1px solid #CBD5E1", fontSize: "11.5px" }}
+                          />
+                          <button
+                            onClick={() => handleAiImproveBullet("project_bullet", b, "Add technical impact and quantifiable achievements", projIdx, bIdx)}
+                            style={{ fontSize: "10.5px", color: "#7C3AED", backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", padding: "0 6px", borderRadius: "3px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "2px" }}
+                          >
+                            <Sparkles size={11} />
+                            <span>Improve</span>
+                          </button>
+                          <button
+                            onClick={() => removeProjectBullet(projIdx, bIdx)}
+                            style={{ border: "none", background: "none", color: "#94A3B8", cursor: "pointer", padding: "0 4px" }}
+                            title="Remove bullet"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => addProjectBullet(projIdx)}
+                        style={{ marginTop: "4px", fontSize: "11px", color: "#2563EB", background: "none", border: "none", cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}
+                      >
+                        <Plus size={12} />
+                        <span>Add Bullet</span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Education Section */}
+              <div style={{ border: "1px solid #E2E8F0", borderRadius: "8px", padding: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>
+                    Education ({content.education?.length || 0})
+                  </span>
+                  <button
+                    onClick={addEducationItem}
+                    style={{ fontSize: "12px", color: "#2563EB", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", padding: "4px 10px", borderRadius: "4px", cursor: "pointer", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Plus size={13} />
+                    <span>Add Degree</span>
+                  </button>
+                </div>
+
+                {(!content.education || content.education.length === 0) ? (
+                  <p style={{ color: "#94A3B8", fontSize: "12px", margin: 0 }}>No education added yet.</p>
+                ) : (
+                  content.education.map((edu, eduIdx) => (
+                    <div key={eduIdx} style={{ marginBottom: "14px", paddingBottom: "10px", borderBottom: "1px solid #F1F5F9" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <input
+                          type="text"
+                          value={edu.degree}
+                          placeholder="Degree (e.g. BS)"
+                          onChange={(e) => updateEducationField(eduIdx, "degree", e.target.value)}
+                          style={{ flex: 1, padding: "5px 8px", borderRadius: "4px", border: "1px solid #CBD5E1", fontSize: "12px", fontWeight: 600 }}
+                        />
+                        <input
+                          type="text"
+                          value={edu.field_of_study || ""}
+                          placeholder="Field of Study (e.g. Software Engineering)"
+                          onChange={(e) => updateEducationField(eduIdx, "field_of_study", e.target.value)}
+                          style={{ flex: 1.5, padding: "5px 8px", borderRadius: "4px", border: "1px solid #CBD5E1", fontSize: "12px" }}
+                        />
+                        <button
+                          onClick={() => removeEducationItem(eduIdx)}
+                          style={{ border: "none", background: "none", color: "#EF4444", cursor: "pointer", padding: "4px" }}
+                          title="Delete Education"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={edu.institution}
+                        placeholder="Institution / University Name"
+                        onChange={(e) => updateEducationField(eduIdx, "institution", e.target.value)}
+                        style={{ width: "100%", padding: "5px 8px", borderRadius: "4px", border: "1px solid #CBD5E1", fontSize: "12px", marginBottom: "6px", boxSizing: "border-box" }}
+                      />
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+                        <input
+                          type="text"
+                          value={edu.start_date || ""}
+                          placeholder="Start Date (e.g. 2019)"
+                          onChange={(e) => updateEducationField(eduIdx, "start_date", e.target.value)}
+                          style={{ width: "100%", padding: "5px 6px", borderRadius: "4px", border: "1px solid #E2E8F0", fontSize: "11px", boxSizing: "border-box" }}
+                        />
+                        <input
+                          type="text"
+                          value={edu.end_date || ""}
+                          placeholder="End Date (e.g. 2023)"
+                          onChange={(e) => updateEducationField(eduIdx, "end_date", e.target.value)}
+                          style={{ width: "100%", padding: "5px 6px", borderRadius: "4px", border: "1px solid #E2E8F0", fontSize: "11px", boxSizing: "border-box" }}
+                        />
+                        <input
+                          type="text"
+                          value={edu.gpa || ""}
+                          placeholder="GPA (e.g. 3.68)"
+                          onChange={(e) => updateEducationField(eduIdx, "gpa", e.target.value)}
+                          style={{ width: "100%", padding: "5px 6px", borderRadius: "4px", border: "1px solid #E2E8F0", fontSize: "11px", boxSizing: "border-box" }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

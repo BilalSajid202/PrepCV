@@ -232,3 +232,42 @@ async def parse_cv_text_with_llm(raw_text: str, job_title: str = "", user_id: Op
         f"{len(normalized['projects'])} projects."
     )
     return normalized
+
+
+# =============================================================================
+# STEP 5: Skill Categorization Helper (used by Resume Generator / Template)
+# =============================================================================
+
+SOFT_SKILLS_KEYWORDS = {
+    "communication", "interpersonal", "teamwork", "collaboration", "organizational",
+    "time management", "problem-solving", "attention to detail", "leadership",
+    "project management", "critical thinking", "analytical", "creative thinking",
+    "adaptability", "flexibility", "reliability", "accountability", "initiative",
+    "presentation", "public speaking", "negotiation", "conflict resolution",
+    "customer service", "client management", "stakeholder management", "ms office",
+    "word", "excel", "powerpoint", "event coordination", "event management",
+    "recruitment", "recruiting", "hiring", "onboarding", "training",
+    "mentoring", "coaching", "employee relations", "hr", "human resources",
+    "networking", "relationship building", "multitasking", "prioritization"
+}
+
+
+def categorize_skills(skills_list: List[str]) -> tuple[List[str], List[str]]:
+    """Separate technical skills from soft/professional skills for resume template rendering."""
+    technical_skills = []
+    soft_skills = []
+
+    for skill in skills_list:
+        skill_lower = skill.lower().strip()
+        is_soft_skill = False
+        for soft_keyword in SOFT_SKILLS_KEYWORDS:
+            if soft_keyword in skill_lower or skill_lower in soft_keyword:
+                is_soft_skill = True
+                break
+
+        if is_soft_skill:
+            soft_skills.append(skill)
+        else:
+            technical_skills.append(skill)
+
+    return technical_skills, soft_skills

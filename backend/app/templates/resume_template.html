@@ -473,10 +473,13 @@
     <div class="edu-entry">
       <div class="edu-header">
         <div class="edu-left">
-          <strong>{{ edu.degree }}</strong>{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}{% if edu.institution %}, {{ edu.institution }}{% endif %}
+          <strong>{{ edu.degree }}</strong>{% if edu.field_of_study %} in {{ edu.field_of_study }}{% endif %}{% if edu.institution %}, {{ edu.institution }}{% endif %}{% if edu.gpa %} &bull; <span style="color: var(--text-light);">GPA: {{ edu.gpa }}</span>{% endif %}
         </div>
-        <div class="edu-right">{{ edu.start_date }} &mdash; {% if edu.is_current %}Present{% else %}{{ edu.end_date }}{% endif %}</div>
+        <div class="edu-right">{% if edu.start_date %}{{ edu.start_date }} &mdash; {% endif %}{% if edu.is_current %}Present{% else %}{{ edu.end_date }}{% endif %}</div>
       </div>
+      {% if edu.description %}
+      <p style="font-size: var(--fs-sub); color: var(--text-muted); margin-top: 2px;">{{ edu.description }}</p>
+      {% endif %}
     </div>
     {% endfor %}
   </section>

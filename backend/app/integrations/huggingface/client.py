@@ -608,69 +608,52 @@ async def extract_cv_with_hf(
         return None
 
     clean_job_title = _sanitize_job_title(job_title)
-    # Send up to 24000 chars of raw text. Dense CVs (many projects, publications,
-    # certifications) can easily run 10-15k+ chars of markdown — truncating too
-    # aggressively silently drops entire sections (Education, Certifications,
-    # References, etc.) before the model ever sees them. Qwen2.5-Coder-32B has
-    # a large context window, so this is well within budget.
-    clean_text = _sanitize_string(raw_text, 24000)
+    # Sanitize raw text to a reasonable bound that preserves all resume sections
+    clean_text = _sanitize_string(raw_text, 15000)
 
     if not clean_text or len(clean_text) < 20:
         logger.warning("Raw text too short for AI extraction.")
         return None
 
-    system_instruction = f"""You are an expert AI Resume/CV parser. You are given a candidate's resume in clean Markdown (.md) format.
-Your task is to analyze the Markdown structure (# Sections, ## Items, - Bullets, | Tables) and extract ALL information into a single, comprehensive JSON object.
+    system_instruction = f"""You are an expert AI Resume/CV parser. You are given a candidate's resume in Markdown (.md) format.
+Your task is to analyze the document and extract ALL key information into a single, structured JSON object.
 
-EXTRACTION INSTRUCTIONS:
+EXTRACTION RULES:
 
 1. PERSONAL INFORMATION:
-   - Extract the candidate's FULL NAME (usually the largest/first text on the resume).
-   - Extract their professional title/headline (e.g., "Software Engineer • AI / Machine Learning Developer • Jr. Lecturer").
-   - Extract email, phone number, and location (city, country).
-   - Extract LinkedIn URL, GitHub URL, and portfolio/website URL if present.
-   - For "summary": Extract the PROFESSIONAL SUMMARY paragraph from the resume. This is typically a 2-4 sentence paragraph describing the candidate's background. Do NOT put contact info here.
+   - Extract the candidate's FULL NAME, professional title/headline, email, phone number, and location.
+   - Extract LinkedIn URL, GitHub URL, and portfolio URL if present.
+   - For "summary": Extract or synthesize a concise 2-4 sentence professional summary.
 
-2. WORK EXPERIENCE - FORMAT AGNOSTIC & CRITICAL:
-   - Extract EVERY individual job/role listed anywhere on the resume.
-   - Resumes format jobs in diverse ways (e.g. "Company | Position", "Position at Company", "Company\nPosition", "Position - Company (Dates)", tables, multi-column).
-   - For each role, extract:
-     * "company": The actual company/organization/university name (e.g., "OmniClouds", "Superior University", "Google")
-     * "position": The actual job title (e.g., "Artificial Intelligence Developer", "Junior Lecturer", "Software Engineer")
+2. WORK EXPERIENCE:
+   - Extract ALL distinct employment roles listed.
+   - For each role:
+     * "company": Company / University / Organization name
+     * "position": Job title
      * "location": Location or "Remote"
-     * "employment_type": "Full-time", "Part-time", "Contract", "Contractual", "Remote", "Internship"
-     * "start_date": Actual start date (e.g. "Dec 2024", "Nov 2023", "2021")
-     * "end_date": Actual end date or "Present" if current
-     * "is_current": true if ongoing role
-     * "description": Brief summary of the role
-     * "achievements": Array of bullet points describing the candidate's responsibilities, achievements, and impact in this role.
-   - Extract ALL roles independently. If the resume lists 3, 4, or 5 jobs, return ALL of them as separate items.
+     * "employment_type": "Full-time", "Part-time", "Contract", "Remote", or "Internship"
+     * "start_date" & "end_date": Dates as listed (e.g. "Dec 2024", "Nov 2023", "Present")
+     * "is_current": true if currently working here
+     * "description": Brief overview
+     * "achievements": Array of up to 4 key bullet points
 
 3. EDUCATION:
-   - Extract EVERY degree/program with institution, degree name, field of study, dates, and GPA/CGPA.
-   - Example: institution="Superior University", degree="Bachelor of Science", field_of_study="Software Engineering", gpa="3.68"
+   - Extract ALL degrees and educational qualifications.
+   - For each item: "institution", "degree" (e.g. "BS", "MS", "Bachelor"), "field_of_study" (e.g. "Software Engineering"), "start_date", "end_date", "is_current", "gpa" (e.g. "3.68"), and "description".
 
 4. SKILLS:
-   - Extract ALL technical and domain skills found in the document (languages, frameworks, tools, libraries, databases).
-   - Return as a flat deduplicated list of strings.
+   - Extract all technical proficiencies, frameworks, tools, and domain skills as a flat deduplicated list of strings.
 
-5. PROJECTS - FORMAT AGNOSTIC & CRITICAL:
-   - Extract EVERY project listed in the resume (under "Projects", "Key Projects", "Academic Projects", "Personal Projects", "Portfolio", or other sections).
-   - For each project:
-     * "name": The clear project title (e.g., "PrepCV - AI Resume Platform", "RAG Medical Q&A Bot", "E-Commerce System")
-     * "description": Detailed description of what the project does, key features, and architecture
-     * "technologies": Array of tools and technologies used (e.g., ["Python", "FastAPI", "React", "Docker", "PostgreSQL"])
-     * "project_url": Demo/live URL if mentioned
-     * "github_url": GitHub repository URL if mentioned
-     * "achievements": Array of specific accomplishments, features built, or performance metrics for this project
+5. PROJECTS:
+   - Extract up to 8 of the most relevant and significant projects listed.
+   - For each project: "name", "description" (concise 1-2 sentences), "technologies" (array of strings), "project_url", "github_url", "achievements" (array of up to 3 bullet points).
 
 6. CERTIFICATIONS:
-   - Extract all certifications, courses, and licenses with name, issuing organization, and dates.
+   - Extract certifications with "name", "issuing_organization", "issue_date", "expiration_date", "credential_id", "credential_url".
 
 Target Role Context: "{clean_job_title}"
-If relevant, tailor the professional summary for this role, but NEVER invent fake information.
 
-Return ONLY valid JSON matching this exact schema (use "" or [] for anything not found — never omit a key or use null):
+Return ONLY valid JSON matching this exact schema (use "" or [] for missing items, never omit keys):
 {{
   "personal_info": {{
     "full_name": "string",
@@ -737,12 +720,8 @@ Return ONLY valid JSON matching this exact schema (use "" or [] for anything not
         system_instruction=system_instruction,
         user_payload=user_payload,
         retry_count=1,
-        # A CV with many jobs/projects/certifications needs a lot of output
-        # tokens to fully represent as JSON. 3000 was too tight and could
-        # truncate the JSON mid-object (making it unparseable) for resumes
-        # like this one with 60+ projects.
-        max_tokens=8000,
-        timeout=90.0,
+        max_tokens=3500,
+        timeout=60.0,
     )
 
     if not api_result:
