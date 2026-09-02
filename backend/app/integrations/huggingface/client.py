@@ -237,6 +237,27 @@ def _sanitize_profile_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+def _parse_json_response(raw_response: str) -> Optional[Dict[str, Any]]:
+    """
+    Robustly pull a JSON object out of a raw LLM text response, tolerating
+    stray markdown code fences or extra text around the JSON.
+    """
+    if not raw_response:
+        return None
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{[\s\S]*\}", cleaned)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
 async def _call_hf_json_api(
     system_instruction: str,
     user_payload: str,
@@ -275,6 +296,11 @@ async def _call_hf_json_api(
         "messages": messages,
         "temperature": 0.2,
         "max_tokens": max_tokens,
+        # Ask the router/model to force a JSON object response when supported.
+        # Models/providers that don't support this simply ignore the field,
+        # so it's safe to always include it; the prompt-level instruction
+        # above is still the fallback guarantee.
+        "response_format": {"type": "json_object"},
     }
 
     # Bound attempts to at most 2 (1 primary + 1 failover key) to never stall the request pipeline
@@ -314,6 +340,15 @@ async def _call_hf_json_api(
                 if api_key:  # If caller passed explicit static key, don't loop indefinitely
                     return None
                 continue
+
+            # Some providers reject unknown fields like response_format with a 400.
+            # Retry once on the same key without it before giving up on this key.
+            if resp.status_code == 400 and "response_format" in payload:
+                logger.info(f"HF API rejected response_format on key [{key_mask}], retrying without it.")
+                payload_no_format = {k: v for k, v in payload.items() if k != "response_format"}
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(api_url, headers=headers, json=payload_no_format)
+                response_time_ms = int((time.time() - call_start) * 1000)
 
             if resp.status_code != 200:
                 logger.warning(
@@ -423,11 +458,9 @@ async def format_cv_with_hf(
     user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Format and enhance CV / profile data using Hugging Face Qwen 30B-class model.
-    Strictly follows:
-      1. Sanitize user data before building prompts.
-      2. Force structured JSON schema output & validate against ProfileSchema before returning.
-      3. Log raw model responses for easy debugging.
+    Format and enhance an already-structured CV/profile dict for a target job title.
+    Sends the profile to the model, gets back improved/tailored JSON, and returns it.
+    On any failure, falls back to returning the sanitized input unchanged.
     """
     km = get_hf_key_manager()
 
@@ -439,97 +472,12 @@ async def format_cv_with_hf(
         clean_profile.pop("_raw_text", None)
         return clean_profile
 
-    system_instruction = f"""You are an elite career coach and ATS resume parsing strategist.
-Your task is to take raw candidate resume data (which may come from diverse resume layouts: dense paragraphs, multi-column tables, pipe-separated rows, unconventional headings, or list styles) and convert it into a structured, ATS-optimized candidate profile JSON object tailored for the target role: "{clean_job_title}".
-
-Parsing & Formatting Rules for Diverse CV Styles:
-1. PARAGRAPH / PROSE STYLES:
-   - If work experiences or projects are written as narrative prose or long paragraphs, decompose them into 2-5 distinct, high-impact bullet points in "achievements".
-   - Start each bullet point with a powerful past-tense action verb (e.g., Engineered, Spearheaded, Architected, Optimized, Deployed, Automated).
-
-2. TABLES & COLUMNAR LAYOUTS:
-   - If text contains pipe symbols (`|`), tabs, or side-by-side columnar data from tables (e.g. "Google | Senior Backend Engineer | 2021 - 2024 | Mountain View, CA"), accurately parse each field into its proper key (company, position, start_date, end_date, location).
-
-3. DIVERSE / NON-STANDARD HEADINGS:
-   - Map unconventional section titles accurately:
-     * Experience: "Career History", "Employment", "Work Experience", "Professional Background", "Engagements", "Where I've Worked" -> experience
-     * Education: "Academics", "Qualifications", "Degrees", "Academic Background", "Schooling" -> education
-     * Skills: "Technical Tooling", "Tech Stack", "Proficiencies", "Competencies", "Expertise", "Core Tools" -> skills
-     * Projects: "Featured Work", "Portfolio", "Open Source", "Selected Builds", "Key Initiatives" -> projects
-     * Certifications: "Accreditations", "Licenses", "Courses & Certifications", "Credentials" -> certifications
-
-4. DATES & METADATA NORMALIZATION:
-   - Normalize varied date expressions (e.g., "06/2020", "June 2020", "2020 - Present", "2021 -- 2023", "Current") into clean standard representations (e.g., "Jun 2020", "Present").
-   - Set "is_current" to true if the role or degree is ongoing.
-
-5. IMPLICIT SKILLS EXTRACTION:
-   - Scan all experience bullets, summaries, and project descriptions for tools, frameworks, languages, and methodologies (e.g. Docker, PostgreSQL, React, AWS, PyTorch, CI/CD). Include them in the "skills" list and deduplicate.
-
-6. TARGET ROLE TAILORING:
-   - Target Role: "{clean_job_title}".
-   - Write a concise 3-4 sentence professional summary in "personal_info.summary" showcasing the candidate's strongest qualifications for this role.
-   - Preserve all authentic candidate facts (names, companies, schools, real metrics). Never invent fake employment history.
-
-Return ONLY valid JSON matching this schema:
-{{
-  "personal_info": {{
-    "full_name": "string",
-    "professional_title": "string",
-    "email": "string",
-    "phone": "string",
-    "location": "string",
-    "linkedin_url": "string",
-    "github_url": "string",
-    "portfolio_url": "string",
-    "summary": "string"
-  }},
-  "experience": [
-    {{
-      "company": "string",
-      "position": "string",
-      "location": "string",
-      "employment_type": "string",
-      "start_date": "string",
-      "end_date": "string",
-      "is_current": false,
-      "description": "string",
-      "achievements": ["string"]
-    }}
-  ],
-  "education": [
-    {{
-      "institution": "string",
-      "degree": "string",
-      "field_of_study": "string",
-      "start_date": "string",
-      "end_date": "string",
-      "is_current": false,
-      "gpa": "string",
-      "description": "string"
-    }}
-  ],
-  "skills": ["string"],
-  "projects": [
-    {{
-      "name": "string",
-      "description": "string",
-      "technologies": ["string"],
-      "project_url": "string",
-      "github_url": "string",
-      "achievements": ["string"]
-    }}
-  ],
-  "certifications": [
-    {{
-      "name": "string",
-      "issuing_organization": "string",
-      "issue_date": "string",
-      "expiration_date": "string",
-      "credential_id": "string",
-      "credential_url": "string"
-    }}
-  ]
-}}"""
+    system_instruction = f"""You are an elite career coach and ATS resume strategist.
+Take the candidate's structured profile data and rewrite the "summary" and experience/project
+"achievements" so they are more compelling and tailored to the target role: "{clean_job_title}".
+Preserve every real fact (names, companies, schools, dates, metrics) exactly. Never invent
+new employers, degrees, or accomplishments. Return the SAME JSON structure you were given,
+with the same keys, just improved wording."""
 
     user_payload = f"Candidate Profile Data:\n{json.dumps(clean_profile, indent=2)}"
 
@@ -543,7 +491,6 @@ Return ONLY valid JSON matching this schema:
         raw_response = api_result["content"]
         usage = api_result.get("usage", {})
 
-        # Log usage
         await log_ai_usage(
             user_id=user_id,
             feature="cv_formatting",
@@ -556,29 +503,22 @@ Return ONLY valid JSON matching this schema:
             api_key_hint=api_result.get("api_key_hint", ""),
         )
 
-        try:
-            # Strip markdown code fences if any
-            clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
-            # Find outermost JSON object
-            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
-            if json_match:
-                clean_json_str = json_match.group(0)
+        parsed = _parse_json_response(raw_response)
+        if parsed is not None:
+            try:
+                return ProfileSchema.model_validate(parsed).model_dump()
+            except Exception as err:
+                logger.warning(f"format_cv_with_hf: schema validation failed, returning raw parsed JSON instead: {err}")
+                return parsed
+        logger.error(f"format_cv_with_hf: could not parse JSON from response. Raw: {raw_response[:500]}")
 
-            parsed = json.loads(clean_json_str)
-            validated_schema = ProfileSchema.model_validate(parsed)
-            logger.info("Successfully validated formatted profile with Pydantic ProfileSchema using Hugging Face Qwen.")
-            return validated_schema.model_dump()
-        except Exception as err:
-            logger.error(f"Failed to parse/validate HF response: {err}. Raw response was: {raw_response[:500]}")
-
-    # Fallback to sanitized raw profile on any failure
     logger.warning("Falling back to pre-sanitized input profile.")
     clean_profile.pop("_raw_text", None)
     return clean_profile
 
 
 async def improve_bullet_with_hf(section: str, original_text: str, instruction: str, user_id: Optional[str] = None) -> Dict[str, str]:
-    """Improve specific section text or bullet point using Hugging Face Qwen with input sanitization."""
+    """Improve a specific section's text or a single bullet point using the HF model."""
     km = get_hf_key_manager()
 
     clean_section = _sanitize_string(section, 50)
@@ -589,10 +529,7 @@ async def improve_bullet_with_hf(section: str, original_text: str, instruction: 
         return {"improved_text": "", "explanation": "No text provided."}
 
     if not km.has_keys():
-        words = clean_text.split()
-        improved = clean_text
-        if words and not words[0].endswith("ed"):
-            improved = f"Spearheaded and executed: {clean_text}"
+        improved = clean_text if clean_text.lower().startswith("spearheaded") else f"Spearheaded and executed: {clean_text}"
         return {
             "improved_text": improved,
             "explanation": "Action-verb formatting applied (offline mode)."
@@ -621,7 +558,6 @@ Return ONLY a JSON object with keys:
         raw_response = api_result["content"]
         usage = api_result.get("usage", {})
 
-        # Log usage
         await log_ai_usage(
             user_id=user_id,
             feature="ai_improve",
@@ -634,24 +570,16 @@ Return ONLY a JSON object with keys:
             api_key_hint=api_result.get("api_key_hint", ""),
         )
 
-        try:
-            clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
-            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
-            if json_match:
-                clean_json_str = json_match.group(0)
+        parsed = _parse_json_response(raw_response)
+        if parsed and "improved_text" in parsed:
+            return {
+                "improved_text": _sanitize_string(parsed.get("improved_text"), 2000),
+                "explanation": _sanitize_string(parsed.get("explanation"), 500),
+            }
+        logger.warning(f"improve_bullet_with_hf: could not parse JSON from response. Raw: {raw_response[:300]}")
 
-            parsed = json.loads(clean_json_str)
-            if "improved_text" in parsed:
-                return {
-                    "improved_text": _sanitize_string(parsed.get("improved_text"), 2000),
-                    "explanation": _sanitize_string(parsed.get("explanation"), 500),
-                }
-        except Exception as e:
-            logger.warning(f"Error parsing bullet improvement JSON: {e}")
-
-    # Heuristic fallback
     return {
-        "improved_text": f"Spearheaded and optimized: {clean_text}" if not clean_text.lower().startswith("spearheaded") else clean_text,
+        "improved_text": clean_text if clean_text.lower().startswith("spearheaded") else f"Spearheaded and optimized: {clean_text}",
         "explanation": "Refined with action-oriented structure."
     }
 
@@ -660,13 +588,16 @@ async def extract_cv_with_hf(
     raw_text: str,
     job_title: str = "",
     user_id: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> Optional[Dict[str, Any]]:
     """
-    AI-first CV extraction: send raw resume text directly to Hugging Face Qwen LLM
-    for structured data extraction. This is the primary extraction path — the raw text
-    is the ONLY input, so the AI must extract everything from scratch.
+    AI-first CV extraction: send raw resume markdown to the HF model and get back
+    a structured JSON object with every field the app needs.
 
-    Returns a validated ProfileSchema-compatible dict, or None if all keys fail.
+    Returns a dict (schema-validated when possible, otherwise the best-effort
+    parsed JSON) or None only if the API call fails or the response isn't
+    parseable JSON at all. A schema-validation mismatch no longer discards a
+    successful extraction — the caller (parse_cv_text_with_llm) normalizes
+    whatever comes back into the guaranteed shape.
     """
     km = get_hf_key_manager()
 
@@ -675,8 +606,12 @@ async def extract_cv_with_hf(
         return None
 
     clean_job_title = _sanitize_job_title(job_title)
-    # Send up to 8000 chars of raw text for optimal latency and coverage
-    clean_text = _sanitize_string(raw_text, 8000)
+    # Send up to 24000 chars of raw text. Dense CVs (many projects, publications,
+    # certifications) can easily run 10-15k+ chars of markdown — truncating too
+    # aggressively silently drops entire sections (Education, Certifications,
+    # References, etc.) before the model ever sees them. Qwen2.5-Coder-32B has
+    # a large context window, so this is well within budget.
+    clean_text = _sanitize_string(raw_text, 24000)
 
     if not clean_text or len(clean_text) < 20:
         logger.warning("Raw text too short for AI extraction.")
@@ -733,7 +668,7 @@ EXTRACTION INSTRUCTIONS:
 Target Role Context: "{clean_job_title}"
 If relevant, tailor the professional summary for this role, but NEVER invent fake information.
 
-Return ONLY valid JSON matching this exact schema:
+Return ONLY valid JSON matching this exact schema (use "" or [] for anything not found — never omit a key or use null):
 {{
   "personal_info": {{
     "full_name": "string",
@@ -800,54 +735,52 @@ Return ONLY valid JSON matching this exact schema:
         system_instruction=system_instruction,
         user_payload=user_payload,
         retry_count=1,
-        max_tokens=3000,
+        # A CV with many jobs/projects/certifications needs a lot of output
+        # tokens to fully represent as JSON. 3000 was too tight and could
+        # truncate the JSON mid-object (making it unparseable) for resumes
+        # like this one with 60+ projects.
+        max_tokens=8000,
     )
 
-    if api_result:
-        raw_response = api_result["content"]
-        usage = api_result.get("usage", {})
+    if not api_result:
+        return None
 
-        # Log AI token usage
-        await log_ai_usage(
-            user_id=user_id,
-            feature="cv_extraction",
-            model=api_result.get("model", ""),
-            input_tokens=usage.get("prompt_tokens", 0),
-            output_tokens=usage.get("completion_tokens", 0),
-            total_tokens=usage.get("total_tokens", 0),
-            response_time_ms=api_result.get("response_time_ms", 0),
-            status="success",
-            api_key_hint=api_result.get("api_key_hint", ""),
+    raw_response = api_result["content"]
+    usage = api_result.get("usage", {})
+
+    # Log token usage regardless of whether parsing/validation below succeeds —
+    # the API call itself succeeded, so this is billable, loggable usage.
+    await log_ai_usage(
+        user_id=user_id,
+        feature="cv_extraction",
+        model=api_result.get("model", ""),
+        input_tokens=usage.get("prompt_tokens", 0),
+        output_tokens=usage.get("completion_tokens", 0),
+        total_tokens=usage.get("total_tokens", 0),
+        response_time_ms=api_result.get("response_time_ms", 0),
+        status="success",
+        api_key_hint=api_result.get("api_key_hint", ""),
+    )
+
+    parsed = _parse_json_response(raw_response)
+    if parsed is None:
+        logger.error(f"extract_cv_with_hf: could not parse JSON from response. Raw: {raw_response[:500]}")
+        return None
+
+    try:
+        result = ProfileSchema.model_validate(parsed).model_dump()
+        logger.info(
+            f"Successfully extracted and schema-validated CV: {len(result.get('experience', []))} experiences, "
+            f"{len(result.get('education', []))} education, {len(result.get('skills', []))} skills."
         )
-
-        try:
-            # Strip markdown code fences if any
-            clean_json_str = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_response.strip(), flags=re.MULTILINE)
-            # Find outermost JSON object
-            json_match = re.search(r"\{[\s\S]*\}", clean_json_str)
-            if json_match:
-                clean_json_str = json_match.group(0)
-
-            parsed = json.loads(clean_json_str)
-            validated_schema = ProfileSchema.model_validate(parsed)
-            result = validated_schema.model_dump()
-
-            # Validate that AI actually extracted real data (not placeholders)
-            exp_list = result.get("experience", [])
-            if exp_list:
-                first_exp = exp_list[0]
-                # Check for known placeholder values that would indicate a bad extraction
-                placeholder_companies = {"professional experience", "key contributor", "company", "organization"}
-                if first_exp.get("company", "").lower().strip() in placeholder_companies:
-                    logger.warning("AI extraction returned placeholder company names — treating as failed extraction.")
-                    return None
-
-            logger.info(
-                f"Successfully extracted CV with AI: {len(result.get('experience', []))} experiences, "
-                f"{len(result.get('education', []))} education, {len(result.get('skills', []))} skills."
-            )
-            return result
-        except Exception as err:
-            logger.error(f"Failed to parse/validate AI CV extraction response: {err}. Raw: {raw_response[:500]}")
-
-    return None
+        return result
+    except Exception as err:
+        # IMPORTANT: a schema mismatch does NOT mean the extraction failed —
+        # the model may have returned a perfectly usable object with, say, an
+        # extra field or a slightly different type. Return the raw parsed JSON
+        # so the caller can normalize it instead of discarding real data.
+        logger.warning(
+            f"extract_cv_with_hf: ProfileSchema validation failed ({err}); "
+            f"returning raw parsed JSON instead of discarding it."
+        )
+        return parsed
