@@ -265,6 +265,7 @@ async def _call_hf_json_api(
     api_key: Optional[str] = None,
     retry_count: int = 1,
     max_tokens: int = 4096,
+    timeout: float = 60.0,
 ) -> Optional[Dict[str, Any]]:
     """
     Call Hugging Face Router chat completions API forcing JSON output.
@@ -305,6 +306,7 @@ async def _call_hf_json_api(
 
     # Bound attempts to at most 2 (1 primary + 1 failover key) to never stall the request pipeline
     max_attempts = min(max(retry_count + 1, 1), 2)
+    client_timeout = httpx.Timeout(timeout, connect=15.0)
 
     for attempt in range(max_attempts):
         if api_key:
@@ -326,7 +328,7 @@ async def _call_hf_json_api(
 
         call_start = time.time()
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=client_timeout) as client:
                 resp = await client.post(api_url, headers=headers, json=payload)
 
             response_time_ms = int((time.time() - call_start) * 1000)
@@ -346,7 +348,7 @@ async def _call_hf_json_api(
             if resp.status_code == 400 and "response_format" in payload:
                 logger.info(f"HF API rejected response_format on key [{key_mask}], retrying without it.")
                 payload_no_format = {k: v for k, v in payload.items() if k != "response_format"}
-                async with httpx.AsyncClient(timeout=10.0) as client:
+                async with httpx.AsyncClient(timeout=client_timeout) as client:
                     resp = await client.post(api_url, headers=headers, json=payload_no_format)
                 response_time_ms = int((time.time() - call_start) * 1000)
 
@@ -396,7 +398,7 @@ async def _call_hf_json_api(
             }
 
         except httpx.TimeoutException:
-            logger.warning(f"HF API timeout on key [{key_mask}]. Rotating key...")
+            logger.warning(f"HF API timeout on key [{key_mask}] after {timeout}s. Rotating key...")
             km.report_timeout(key, cooldown_seconds=5)
         except Exception as e:
             logger.error(f"HF API request error on key [{key_mask}]: {e}")
@@ -740,6 +742,7 @@ Return ONLY valid JSON matching this exact schema (use "" or [] for anything not
         # truncate the JSON mid-object (making it unparseable) for resumes
         # like this one with 60+ projects.
         max_tokens=8000,
+        timeout=90.0,
     )
 
     if not api_result:
