@@ -198,56 +198,34 @@ def normalize_cv_data(data: Optional[dict]) -> Dict[str, Any]:
 
 async def parse_cv_text_with_llm(raw_text: str, job_title: str = "", user_id: Optional[str] = None) -> Dict[str, Any]:
     """
-    Full pipeline:
-      1. raw_text (markdown) -> extract_cv_with_hf() [HF client call with 90s timeout]
-      2. If AI extraction succeeds, normalize to guaranteed schema.
-      3. If AI extraction times out, fails, or returns 0 experiences/education/skills,
-         automatically fallback to fallback_cv_parser() so no CV data is lost.
-      4. Backfill any missing personal info fields (email, phone, location, etc.)
-         from fallback heuristics to guarantee complete profile coverage.
+    AI-first CV extraction pipeline:
+      1. Send raw markdown CV directly to Hugging Face Qwen model (extract_cv_with_hf).
+      2. Model performs deep extraction across Personal Info, Experience, Education, Skills, Projects, and Certifications.
+      3. Normalize the AI output to the guaranteed schema and return.
     """
     from app.integrations.huggingface.client import extract_cv_with_hf, get_hf_key_manager
 
     km = get_hf_key_manager()
-    ai_result = None
+    if not km.has_keys():
+        logger.warning("==> [CV Parser] No HF API keys configured. Returning empty skeleton.")
+        return empty_cv_skeleton()
 
-    if km.has_keys():
-        try:
-            logger.info(f"==> [CV Parser] Calling Hugging Face model for extraction ({len(raw_text)} chars)...")
-            ai_result = await extract_cv_with_hf(raw_text, job_title=job_title, user_id=user_id)
-        except Exception as e:
-            logger.error(f"==> [CV Parser] AI extraction raised an exception: {e}")
+    try:
+        logger.info(f"==> [CV Parser] Calling Hugging Face AI model for extraction ({len(raw_text)} chars)...")
+        ai_result = await extract_cv_with_hf(raw_text, job_title=job_title, user_id=user_id)
+    except Exception as e:
+        logger.error(f"==> [CV Parser] AI extraction raised an exception: {e}", exc_info=True)
+        ai_result = None
 
-    # Parse and normalize AI result if available
-    normalized = empty_cv_skeleton()
-    if ai_result:
-        parsed = extract_json_from_llm_output(ai_result)
-        normalized = normalize_cv_data(parsed)
+    if not ai_result:
+        logger.warning("==> [CV Parser] AI model returned no parsed data.")
+        return empty_cv_skeleton()
 
-    # Check if AI returned meaningful data (at least 1 experience, education, skill, or project)
-    has_ai_data = bool(
-        normalized["experience"]
-        or normalized["education"]
-        or normalized["skills"]
-        or normalized["projects"]
-    )
-
-    # If AI extraction failed, timed out, or returned empty data -> run fallback parser
-    if not has_ai_data:
-        logger.warning("==> [CV Parser] AI extraction produced no data (timeout/quota/empty). Running local fallback parser...")
-        fallback_data = fallback_cv_parser(raw_text, job_title=job_title)
-        normalized = normalize_cv_data(fallback_data)
-    else:
-        # AI succeeded, but let's smartly backfill any missing contact fields from heuristic parser
-        fallback_data = fallback_cv_parser(raw_text, job_title=job_title)
-        for field in ("full_name", "email", "phone", "location", "linkedin_url", "github_url", "portfolio_url"):
-            if not normalized["personal_info"].get(field) and fallback_data["personal_info"].get(field):
-                normalized["personal_info"][field] = fallback_data["personal_info"][field]
-        if not normalized["skills"] and fallback_data["skills"]:
-            normalized["skills"] = fallback_data["skills"]
+    parsed = extract_json_from_llm_output(ai_result)
+    normalized = normalize_cv_data(parsed)
 
     logger.info(
-        f"==> [CV Parser] Extraction complete: "
+        f"==> [CV Parser] AI extraction complete: "
         f"{len(normalized['experience'])} experiences, "
         f"{len(normalized['education'])} education, "
         f"{len(normalized['skills'])} skills, "

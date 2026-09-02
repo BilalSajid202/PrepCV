@@ -6,7 +6,7 @@ Run: python test_cv_extraction.py
 
 import sys
 import json
-from app.business_logic.cv_extractor import extract_raw_text_from_file, parse_cv_text_with_llm, fallback_cv_parser
+from app.business_logic.cv_extractor import extract_raw_text_from_file, parse_cv_text_with_llm
 
 # Sample raw text similar to what would be extracted from Rasikh's CV
 SAMPLE_CV_TEXT = """
